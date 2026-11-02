@@ -82,6 +82,80 @@ fn main() {
 
     setup_brightness_worker();
     let app = tauri::Builder::default()
+        .register_uri_scheme_protocol("nectar-icon", |ctx, request| {
+            use tauri::http::{header, Response, StatusCode};
+
+            fn percent_decode(input: &str) -> Option<String> {
+                let bytes = input.as_bytes();
+                let mut out = Vec::with_capacity(bytes.len());
+                let mut i = 0;
+                while i < bytes.len() {
+                    if bytes[i] == b'%' {
+                        if i + 2 >= bytes.len() {
+                            return None;
+                        }
+                        let hex = std::str::from_utf8(&bytes[i + 1..i + 3]).ok()?;
+                        out.push(u8::from_str_radix(hex, 16).ok()?);
+                        i += 3;
+                    } else {
+                        out.push(bytes[i]);
+                        i += 1;
+                    }
+                }
+                String::from_utf8(out).ok()
+            }
+
+            // A segment may not contain a path separator or traversal, but it can
+            // legitimately hold spaces and parentheses (custom icon keys come from
+            // real filesystem paths).
+            let valid = |segment: &str| {
+                !segment.is_empty()
+                    && segment.len() <= 200
+                    && !segment.contains('/')
+                    && !segment.contains('\\')
+                    && !segment.contains("..")
+                    && segment.chars().all(|c| !c.is_control())
+            };
+
+            let path = match percent_decode(request.uri().path().trim_start_matches('/')) {
+                Some(path) => path,
+                None => {
+                    return Response::builder()
+                        .status(StatusCode::BAD_REQUEST)
+                        .body(Vec::new())
+                        .unwrap();
+                }
+            };
+            let (folder, file, cache) = match path.strip_prefix("custom/") {
+                Some(stem) if valid(stem) => ("custom_icons", stem, "no-cache"),
+                None if valid(&path) => ("icons", path.as_str(), "public, max-age=31536000, immutable"),
+                _ => {
+                    return Response::builder()
+                        .status(StatusCode::BAD_REQUEST)
+                        .body(Vec::new())
+                        .unwrap();
+                }
+            };
+
+            let bytes = ctx
+                .app_handle()
+                .path()
+                .app_config_dir()
+                .ok()
+                .and_then(|dir| std::fs::read(dir.join(folder).join(format!("{file}.png"))).ok());
+
+            match bytes {
+                Some(bytes) => Response::builder()
+                    .header(header::CONTENT_TYPE, "image/png")
+                    .header(header::CACHE_CONTROL, cache)
+                    .body(bytes)
+                    .unwrap(),
+                None => Response::builder()
+                    .status(StatusCode::NOT_FOUND)
+                    .body(Vec::new())
+                    .unwrap(),
+            }
+        })
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_drag::init())
@@ -200,6 +274,7 @@ fn main() {
             set_dock_mode_for_window,
             set_notch_mode_for_window,
             get_cpu_usage,
+            set_notch_visible,
             get_ram_usage,
             get_disk_space,
             get_network_speed,

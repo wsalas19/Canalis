@@ -15,6 +15,39 @@ function saveSetting(key: string, value: string) {
   invoke("save_setting", { key, value }).catch(console.error);
 }
 
+// Rapid slider movement would otherwise write settings.json and broadcast a
+// settings-changed event on every input tick. latest value wins; flush on unload
+// so a change made just before closing is not lost.
+type PendingSave = { timer: number; value: string };
+const pendingSaves = new Map<string, PendingSave>();
+
+function flushSetting(key: string) {
+  const entry = pendingSaves.get(key);
+  if (!entry) return;
+  pendingSaves.delete(key);
+  window.clearTimeout(entry.timer);
+  invoke("save_setting", { key, value: entry.value }).catch(console.error);
+}
+
+export function flushPendingSaves() {
+  for (const key of [...pendingSaves.keys()]) flushSetting(key);
+}
+
+function saveSettingDebounced(key: string, value: string, delay = 300) {
+  localStorage.setItem(key, value);
+  const existing = pendingSaves.get(key);
+  if (existing) window.clearTimeout(existing.timer);
+  pendingSaves.set(key, {
+    value,
+    timer: window.setTimeout(() => flushSetting(key), delay),
+  });
+}
+
+if (typeof window !== "undefined") {
+  window.addEventListener("beforeunload", flushPendingSaves);
+  window.addEventListener("pagehide", flushPendingSaves);
+}
+
 function readBool(val: string | null): boolean {
   return val === "true";
 }
@@ -871,7 +904,7 @@ export function useSettings() {
 
   const handleScaleChange = (val: number) => {
     setScale(val);
-    saveSetting("nectar-scale", val.toString());
+    saveSettingDebounced("nectar-scale", val.toString());
   };
 
   const handleWidgetsChange = (config: WidgetConfig) => {
@@ -915,17 +948,17 @@ export function useSettings() {
 
   const handleOpacityChange = (value: number) => {
     setThemeOpacity(value);
-    saveSetting("nectar-theme-opacity", String(value));
+    saveSettingDebounced("nectar-theme-opacity", String(value));
   };
 
   const handleSaturationChange = (value: number) => {
     setThemeSaturation(value);
-    saveSetting("nectar-theme-saturation", String(value));
+    saveSettingDebounced("nectar-theme-saturation", String(value));
   };
 
   const handleBrightnessChange = (value: number) => {
     setThemeBrightness(value);
-    saveSetting("nectar-theme-brightness", String(value));
+    saveSettingDebounced("nectar-theme-brightness", String(value));
   };
 
   // ── City search ──

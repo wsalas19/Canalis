@@ -1046,6 +1046,38 @@ fn get_cache_key(path: &str, name: Option<&str>) -> String {
     }
 }
 
+// Icons are content-addressed on disk and fetched through this origin so the
+// webview never receives base64 through the IPC bridge.
+const ICON_ORIGIN: &str = "http://nectar-icon.localhost";
+
+fn icon_id(key: &str) -> String {
+    let mut hash: u64 = 0xcbf2_9ce4_8422_2325;
+    for byte in key.as_bytes() {
+        hash ^= u64::from(*byte);
+        hash = hash.wrapping_mul(0x100_0000_01b3);
+    }
+    format!("{hash:016x}")
+}
+
+fn serve_icon(app: &AppHandle, key: &str, payload: String) -> String {
+    let Some(data) = payload.strip_prefix("data:image/png;base64,") else {
+        return payload;
+    };
+    let id = icon_id(key);
+    if let Ok(dir) = app.path().app_config_dir() {
+        let dir = dir.join("icons");
+        let file = dir.join(format!("{id}.png"));
+        if !file.exists() {
+            use base64::Engine as _;
+            if let Ok(bytes) = base64::engine::general_purpose::STANDARD.decode(data) {
+                let _ = std::fs::create_dir_all(&dir);
+                let _ = std::fs::write(&file, bytes);
+            }
+        }
+    }
+    format!("{ICON_ORIGIN}/{id}")
+}
+
 fn get_custom_icons_dir(app: &AppHandle) -> Result<std::path::PathBuf, String> {
     let dir = app.path().app_config_dir().map_err(|e| e.to_string())?.join("custom_icons");
     let _ = std::fs::create_dir_all(&dir);
@@ -1459,6 +1491,11 @@ fn icon_from_exe_neighbourhood(exe: &str) -> Option<String> {
 
 #[tauri::command]
 pub async fn get_app_icon(app: AppHandle, path: String, name: Option<String>, hwnd: Option<isize>) -> Result<Option<String>, String> {
+    let payload = get_app_icon_data(app.clone(), path.clone(), name.clone(), hwnd).await?;
+    Ok(payload.map(|data| serve_icon(&app, &get_cache_key(&path, name.as_deref()), data)))
+}
+
+async fn get_app_icon_data(app: AppHandle, path: String, name: Option<String>, hwnd: Option<isize>) -> Result<Option<String>, String> {
     let cache_dir = app.path().app_config_dir().map_err(|e| e.to_string())?;
     let cache_path = cache_dir.join("icons_cache.json");
     let cache_key = get_cache_key(&path, name.as_deref());
@@ -1814,6 +1851,7 @@ pub async fn clear_icon_cache(app: AppHandle) -> Result<(), String> {
     let cache_dir = app.path().app_config_dir().map_err(|e| e.to_string())?;
     let cache_path = cache_dir.join("icons_cache.json");
     let _ = std::fs::remove_file(&cache_path);
+    let _ = std::fs::remove_dir_all(cache_dir.join("icons"));
     if let Some(c) = ICON_CACHE.get() {
         if let Ok(mut lock) = c.lock() {
             lock.clear();
@@ -1880,12 +1918,11 @@ pub async fn set_custom_icon(app: AppHandle, cache_key: String, icon_data: Strin
     } else {
         std::collections::HashMap::new()
     };
-    manifest.insert(sanitize_filename(&cache_key), cache_key);
+    manifest.insert(sanitize_filename(&cache_key), cache_key.clone());
     let _ = std::fs::write(&manifest_path, serde_json::to_string(&manifest).unwrap_or_default());
 
-    // Return the data URI for immediate use
-    let b64 = base64::engine::general_purpose::STANDARD.encode(&png_bytes);
-    Ok(format!("data:image/png;base64,{}", b64))
+    // Return the URL for immediate use
+    Ok(format!("{ICON_ORIGIN}/custom/{}", sanitize_filename(&cache_key)))
 }
 
 #[tauri::command]
@@ -1933,11 +1970,7 @@ pub async fn get_custom_icons(app: AppHandle) -> Result<HashMap<String, String>,
                 if let Some(stem) = path.file_stem().and_then(|s| s.to_str()) {
                     // Use original cache key from manifest, fallback to sanitized stem
                     let key = manifest.get(stem).cloned().unwrap_or_else(|| stem.to_string());
-                    if let Ok(data) = std::fs::read(&path) {
-                        use base64::Engine;
-                        let b64 = base64::engine::general_purpose::STANDARD.encode(&data);
-                        result.insert(key, format!("data:image/png;base64,{}", b64));
-                    }
+                    result.insert(key, format!("{ICON_ORIGIN}/custom/{stem}"));
                 }
             }
         }
@@ -2840,6 +2873,11 @@ const MONITOR_TARGETING_KEYS: [&str; 5] = [
     "nectar-notch-monitor-id",
     "nectar-dock-enabled",
 ];
+
+#[tauri::command]
+pub fn set_notch_visible(visible: bool) {
+    crate::state::NOTCH_VISIBLE.store(visible, std::sync::atomic::Ordering::Relaxed);
+}
 
 #[tauri::command]
 pub fn save_setting(app: AppHandle, key: String, value: serde_json::Value) -> Result<(), String> {
