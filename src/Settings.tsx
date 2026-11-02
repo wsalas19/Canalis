@@ -127,6 +127,8 @@ function SettingsApp() {
               toggleCorners={settings.toggleCorners}
               scale={settings.scale}
               handleScaleChange={settings.handleScaleChange}
+              fontFamily={settings.fontFamily}
+              handleFontFamilyChange={settings.handleFontFamilyChange}
             />
           )}
           {activeTab === "calendar-sync" && <CalendarSyncPage onBack={() => setActiveTab("notch")} />}

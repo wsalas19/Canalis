@@ -1,4 +1,4 @@
-import { Palette, Droplet, Contrast, Droplets, Sun, Square, Maximize2 } from "lucide-react";
+import { Palette, Droplet, Contrast, Droplets, Sun, Square, Maximize2, Type, X } from "lucide-react";
 import { SettingRow } from "./SettingRow";
 import { SettingSection } from "./SettingSection";
 import { Dropdown } from "./Dropdown";
@@ -19,6 +19,8 @@ interface AppearanceTabProps {
   toggleCorners: () => void;
   scale: number;
   handleScaleChange: (val: number) => void;
+  fontFamily: string;
+  handleFontFamilyChange: (value: string) => void;
 }
 
 export function AppearanceTab({
@@ -36,6 +38,8 @@ export function AppearanceTab({
   toggleCorners,
   scale,
   handleScaleChange,
+  fontFamily,
+  handleFontFamilyChange,
 }: AppearanceTabProps) {
   const t = useT();
   const showCustomColor = themeMode === "custom";
@@ -124,6 +128,30 @@ export function AppearanceTab({
             </SettingRow>
           </>
         )}
+      </SettingSection>
+
+      <SettingSection id="appearance-typography" title={t("appearance.font.group")}>
+        <SettingRow icon={Type} label={t("appearance.font")} desc={t("appearance.font.desc")} divider={false}>
+          <div className="font-input-row">
+            <input
+              type="text"
+              value={fontFamily}
+              spellCheck={false}
+              placeholder={t("appearance.font.placeholder")}
+              onChange={(e) => handleFontFamilyChange(e.target.value)}
+            />
+            {fontFamily && (
+              <button
+                className="font-clear-btn"
+                title={t("appearance.font.reset")}
+                aria-label={t("appearance.font.reset")}
+                onClick={() => handleFontFamilyChange("")}
+              >
+                <X size={12} />
+              </button>
+            )}
+          </div>
+        </SettingRow>
       </SettingSection>
 
       <SettingSection id="appearance-display" title={t("appearance.display.group")}>

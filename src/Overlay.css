@@ -84,7 +84,7 @@ body,
 
 .update-splash-text {
     color: var(--nectar-text, rgba(255, 255, 255, 0.9));
-    font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    font-family: var(--nectar-font, "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif);
     font-size: 14px;
     font-weight: 500;
     margin-bottom: 16px;
@@ -257,12 +257,7 @@ body,
 .volume-notch-action-percent {
   font-size: 10px;
   font-weight: 700;
-  font-family:
-    "Inter",
-    -apple-system,
-    BlinkMacSystemFont,
-    "Segoe UI",
-    sans-serif;
+  font-family: var(--nectar-font, "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif);
   letter-spacing: -0.02em;
 }
 
@@ -329,12 +324,7 @@ body,
   color: var(--nectar-text-muted, rgba(255, 255, 255, 0.6));
   font-size: 11px;
   font-weight: 500;
-  font-family:
-    "Inter",
-    -apple-system,
-    BlinkMacSystemFont,
-    "Segoe UI",
-    sans-serif;
+  font-family: var(--nectar-font, "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif);
   text-align: center;
   grid-column: 1 / -1;
   display: flex;
@@ -409,12 +399,7 @@ body,
   color: var(--nectar-text, white);
   font-size: 9px;
   font-weight: 700;
-  font-family:
-    "Inter",
-    -apple-system,
-    BlinkMacSystemFont,
-    "Segoe UI",
-    sans-serif;
+  font-family: var(--nectar-font, "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif);
   transition: opacity 0.16s ease;
 }
 
@@ -436,12 +421,7 @@ body,
   font-weight: 700;
   font-variant-numeric: tabular-nums;
   letter-spacing: -0.02em;
-  font-family:
-    "Inter",
-    -apple-system,
-    BlinkMacSystemFont,
-    "Segoe UI",
-    sans-serif;
+  font-family: var(--nectar-font, "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif);
   opacity: 0;
   transition: opacity 0.16s ease;
 }

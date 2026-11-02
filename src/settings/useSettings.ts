@@ -194,6 +194,9 @@ export function useSettings() {
     const val = localStorage.getItem("nectar-theme-brightness");
     return val !== null ? parseFloat(val) : 0.15;
   });
+  const [fontFamily, setFontFamily] = useState(
+    () => localStorage.getItem("nectar-font-family") || ""
+  );
   const [exportStatus, setExportStatus] = useState<"idle" | "exporting" | "success" | "error">("idle");
   const [importStatus, setImportStatus] = useState<"idle" | "importing" | "success" | "error">("idle");
   const [resetStatus, setResetStatus] = useState<"idle" | "confirm" | "resetting">("idle");
@@ -291,6 +294,7 @@ export function useSettings() {
       apply(getVal("nectar-theme-opacity"), setThemeOpacity, parseFloat);
       apply(getVal("nectar-theme-saturation"), setThemeSaturation, parseFloat);
       apply(getVal("nectar-theme-brightness"), setThemeBrightness, parseFloat);
+      apply(getVal("nectar-font-family"), setFontFamily, (v) => v);
 
       const widgetsVal = getVal("nectar-status-widgets");
       if (widgetsVal) {
@@ -400,6 +404,7 @@ export function useSettings() {
     "nectar-theme-opacity": setThemeOpacity,
     "nectar-theme-saturation": setThemeSaturation,
     "nectar-theme-brightness": setThemeBrightness,
+    "nectar-font-family": (v) => setFontFamily(v === null || v === undefined ? "" : String(v)),
     "nectar-weather-city": (v) => {
       setCityName(v || "");
       setCityQuery(v || "");
@@ -928,6 +933,12 @@ export function useSettings() {
     saveSetting("nectar-theme-brightness", String(value));
   };
 
+  const handleFontFamilyChange = (value: string) => {
+    const next = value.slice(0, 80);
+    setFontFamily(next);
+    saveSetting("nectar-font-family", next);
+  };
+
   // ── City search ──
   const selectCity = async (city: {
     name: string;
@@ -1068,6 +1079,8 @@ export function useSettings() {
     handleSaturationChange,
     themeBrightness,
     handleBrightnessChange,
+    fontFamily,
+    handleFontFamilyChange,
 
     // Notch
     notchMode,

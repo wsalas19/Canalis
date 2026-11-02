@@ -153,6 +153,7 @@ Removing a link or disconnecting the account deletes its stored secret and cache
 | `nectar-theme-saturation` | float string | `"0.50"` | Color saturation for custom/adaptive themes (0.0 to 1.0). |
 | `nectar-theme-brightness` | float string | `"0.15"` | Background brightness for custom/adaptive themes (0.0 to 1.0). |
 | `nectar-corners-enabled` | `"true"` / `"false"` | `"false"` | Render rounded screen corner overlays on top edges. |
+| `nectar-font-family` | string | `""` | Font family to use across the notch, dock and windows. Empty = system default stack. Accepts any family installed on the machine, or a full CSS font list. |
 
 ### Status Widgets
 
