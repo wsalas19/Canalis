@@ -16,6 +16,7 @@ pub struct AudioVisualizationData {
 pub struct MediaInfo {
     pub title: String,
     pub artist: String,
+    pub album: String,
     pub is_playing: bool,
     pub has_media: bool,
     pub artwork: Option<Vec<String>>,

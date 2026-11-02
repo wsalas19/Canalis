@@ -869,7 +869,7 @@ pub fn setup_system_worker(app_handle: AppHandle) -> Sender<SystemCommand> {
             let mut last_processed_media = std::time::Instant::now();
             let mut last_device_check = std::time::Instant::now();
             #[allow(clippy::type_complexity)]
-            let mut last_emitted_info: Option<(String, String, bool, bool, Option<String>, i64, i64)> = None;
+            let mut last_emitted_info: Option<(String, String, String, bool, bool, Option<String>, i64, i64)> = None;
             let mut last_volume: f32 = -1.0;
             let mut last_sessions_json = String::new();
             let mut last_muted: bool = false;
@@ -1048,18 +1048,23 @@ pub fn setup_system_worker(app_handle: AppHandle) -> Sender<SystemCommand> {
                                         let title = props.Title().unwrap_or_default().to_string();
                                         if !title.is_empty() {
                                             let artist = props.Artist().unwrap_or_default().to_string();
+                                            let album = props.AlbumTitle().unwrap_or_default().to_string();
                                             // A new track starts a fresh art-retry budget.
                                             if last_emitted_info
                                                 .as_ref()
-                                                .is_none_or(|(t, a, _, _, _, _, _)| t != &title || a != &artist)
+                                                .is_none_or(|(t, a, _, _, _, _, _, _)| t != &title || a != &artist)
                                             {
                                                 stale_art_reads = 0;
                                             }
                                             let mut artwork = None;
                                             let mut got_art_from_cache = false;
                                             if !art_retry {
-                                                if let Some((ref last_title, ref last_artist, _, _, ref last_art, _, _)) = last_emitted_info {
-                                                    if last_title == &title && last_artist == &artist {
+                                                if let Some((ref last_title, ref last_artist, ref last_album, _, _, ref last_art, _, _)) = last_emitted_info {
+                                                    let same_track = last_title == &title && last_artist == &artist;
+                                                    // Same album: the "stale" stream SMTC still serves is the right
+                                                    // cover, so keep it instead of clearing and retrying.
+                                                    let same_album = !same_track && !album.is_empty() && last_album == &album;
+                                                    if (same_track || same_album) && last_art.is_some() {
                                                         artwork = last_art.as_ref().map(|art| vec![art.clone()]);
                                                         got_art_from_cache = true;
                                                     }
@@ -1132,7 +1137,7 @@ pub fn setup_system_worker(app_handle: AppHandle) -> Sender<SystemCommand> {
                                                 .duration_since(std::time::UNIX_EPOCH)
                                                 .map(|d| d.as_millis() as u64)
                                                 .unwrap_or(0);
-                                            let info = MediaInfo { title, artist, is_playing, has_media: true, artwork, position_ms, duration_ms, seek_enabled, position_updated_at: now_ms, source_id: active_id.clone() };
+                                            let info = MediaInfo { title, artist, album, is_playing, has_media: true, artwork, position_ms, duration_ms, seek_enabled, position_updated_at: now_ms, source_id: active_id.clone() };
                                             if is_playing { best_info = Some(info); break; } else if best_info.is_none() { best_info = Some(info); }
                                         }
                                     }
@@ -1140,16 +1145,16 @@ pub fn setup_system_worker(app_handle: AppHandle) -> Sender<SystemCommand> {
                             }
                         }
                     }
-                    let current = best_info.unwrap_or(MediaInfo { title: "".into(), artist: "".into(), is_playing: false, has_media: false, artwork: None, position_ms: 0, duration_ms: 0, seek_enabled: false, position_updated_at: 0, source_id: String::new() });
+                    let current = best_info.unwrap_or(MediaInfo { title: "".into(), artist: "".into(), album: "".into(), is_playing: false, has_media: false, artwork: None, position_ms: 0, duration_ms: 0, seek_enabled: false, position_updated_at: 0, source_id: String::new() });
                     let art_str = current.artwork.as_ref().and_then(|a| a.first()).cloned();
-                    if last_emitted_info.as_ref().is_none_or(|(t, a, p, h, art, pos, _dur)| {
-                        t != &current.title || a != &current.artist || p != &current.is_playing || h != &current.has_media || art != &art_str ||
-                        // For position: emit if >1s difference (avoid spamming on every poll)
+                    if last_emitted_info.as_ref().is_none_or(|(t, a, al, p, h, art, pos, _dur)| {
+                        t != &current.title || a != &current.artist || al != &current.album || p != &current.is_playing || h != &current.has_media || art != &art_str ||
+                        // For position: emit if >1s difference (avoid spamming on each read)
                         (*pos - current.position_ms).abs() > 1000
                     }) {
                         let _ = handle_system.emit("media-update", current.clone());
                         ANY_MEDIA_PLAYING.store(current.is_playing, Ordering::Relaxed);
-                        last_emitted_info = Some((current.title, current.artist, current.is_playing, current.has_media, art_str, current.position_ms, current.duration_ms));
+                        last_emitted_info = Some((current.title, current.artist, current.album, current.is_playing, current.has_media, art_str, current.position_ms, current.duration_ms));
                     }
                 }
                 std::thread::sleep(std::time::Duration::from_millis(64));

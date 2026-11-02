@@ -9,6 +9,7 @@ import { CalendarDays } from 'lucide-react';
 interface MediaInfo {
   title: string;
   artist: string;
+  album?: string;
   is_playing: boolean;
   has_media: boolean;
   artwork?: string[];
