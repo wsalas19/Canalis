@@ -9,6 +9,18 @@ import { initTheme } from "./theme";
 import { PlayIcon, PauseIcon, SkipBackIcon, SkipForwardIcon, VolumeLowIcon, VolumeHighIcon, MusicNoteIcon } from "./icons";
 import { CompactMediaPlayer } from "./CompactMediaPlayer";
 import { artTheme, FALLBACK_THEME, type ArtTheme } from "./music/palette";
+import {
+  MediaProvider,
+  SystemProvider,
+  UiProvider,
+  useMediaActions,
+  useMediaState,
+  useSystemActions,
+  useSystemState,
+  useUiActions,
+  useUiState,
+} from "./state/AppProviders";
+import type { MediaInfo, WifiStatus } from "./state/appReducer";
 import { useWeather } from "./hooks/useWeather";
 import { useSettingsSync } from "./hooks/useSettingsSync";
 import { useTrailingThrottle } from "./hooks/useTrailingThrottle";
@@ -22,7 +34,6 @@ import { t as translate, useT } from "./i18n";
 import { NotchShelf, useShelf } from "./components/NotchShelf";
 import { parseCcLayout, parsePanelOrder, resolveCcLayout, type CcKind } from "./panelOrder";
 import { NotchProgressBorder } from "./components/NotchProgressBorder";
-import type { WidgetConfig } from "./components/StatusWidgetConfig";
 import {
   DEFAULT_DUAL_CLOCK_ZONE,
   dayShiftLabel,
@@ -276,23 +287,6 @@ function UpdateActivity() {
   );
 }
 
-interface WifiStatus {
-  enabled: boolean;
-  connected: boolean;
-}
-
-interface MediaInfo {
-  title: string;
-  artist: string;
-  is_playing: boolean;
-  has_media: boolean;
-  artwork?: string[];
-  position_ms?: number;
-  duration_ms?: number;
-  seek_enabled?: boolean;
-  position_updated_at?: number;
-}
-
 const MARQUEE_SPEED = 30; // px/s — constant for all titles
 const MARQUEE_MIN_DURATION = 5; // floor so short titles don't flicker
 
@@ -342,8 +336,90 @@ const TitleMarquee = ({ title }: { title: string }) => {
 
 
 
-function App() {
+function AppNotch() {
   const t = useT();
+
+  const media = useMediaState();
+  const system = useSystemState();
+  const ui = useUiState();
+  const {
+    setIsPlaying,
+    setMediaInfo,
+    setAlbumArtUrl,
+    setAlbumArtKey,
+    setVolume,
+    setIsMuted,
+    setMediaSessions,
+  } = useMediaActions();
+  const {
+    setBatteryLevel,
+    setIsCharging,
+    setBatterySecondsLeft,
+    setHasBattery,
+    setBatterySaverEnabled,
+    setCurrentBrightness,
+    setCpuUsage,
+    setRamUsage,
+    setDiskSpace,
+    setNetUpSpeed,
+    setNetDownSpeed,
+    setWifiStatus,
+    setBluetoothEnabled,
+    setLanStatus,
+    setStatusWidgets,
+  } = useSystemActions();
+  const {
+    setIsHovered,
+    setIsNotchHovered,
+    setIsVisible,
+    setIsImpacted,
+    setIsExpanded,
+    setIsFullscreen,
+    setIsOverlapped,
+    setIsEdgeHovered,
+    setInteractionState,
+    setNectarMode,
+    setCcView,
+    setIsReady,
+  } = useUiActions();
+
+  const isPlaying = media.isPlaying;
+  const mediaInfo = media.mediaInfo;
+  const albumArtUrl = media.albumArtUrl;
+  const albumArtKey = media.albumArtKey;
+  const volume = media.volume;
+  const isMuted = media.isMuted;
+  const mediaSessions = media.mediaSessions;
+
+  const batteryLevel = system.batteryLevel;
+  const isCharging = system.isCharging;
+  const batterySecondsLeft = system.batterySecondsLeft;
+  const hasBattery = system.hasBattery;
+  const batterySaverEnabled = system.batterySaverEnabled;
+  const currentBrightness = system.currentBrightness;
+  const cpuUsage = system.cpuUsage;
+  const ramUsage = system.ramUsage;
+  const diskSpace = system.diskSpace;
+  const netUpSpeed = system.netUpSpeed;
+  const netDownSpeed = system.netDownSpeed;
+  const wifiStatus = system.wifiStatus;
+  const bluetoothEnabled = system.bluetoothEnabled;
+  const lanStatus = system.lanStatus;
+  const statusWidgets = system.statusWidgets;
+
+  const isHovered = ui.isHovered;
+  const isNotchHovered = ui.isNotchHovered;
+  const isVisible = ui.isVisible;
+  const isImpacted = ui.isImpacted;
+  const isExpanded = ui.isExpanded;
+  const isFullscreen = ui.isFullscreen;
+  const isOverlapped = ui.isOverlapped;
+  const isEdgeHovered = ui.isEdgeHovered;
+  const interactionState = ui.interactionState;
+  const nectarMode = ui.nectarMode;
+  const ccView = ui.ccView;
+  const isReady = ui.isReady;
+
   useEffect(() => {
     return initTheme();
   }, []);
@@ -351,17 +427,11 @@ function App() {
   const [time, setTime] = useState("");
   const [dualTime, setDualTime] = useState("");
   const [dualDayShift, setDualDayShift] = useState(0);
-  const [isHovered, setIsHovered] = useState(false);
-  const [isReady, setIsReady] = useState(false);
   const [scale, setScale] = useState(() => parseFloat(localStorage.getItem("nectar-scale") || "1.0"));
   const [timeFormat24h, setTimeFormat24h] = useState(() => localStorage.getItem("nectar-time-format-24h") === "true");
 
 
-  const [batteryLevel, setBatteryLevel] = useState(100);
-  const [isCharging, setIsCharging] = useState(false);
-  const [batterySecondsLeft, setBatterySecondsLeft] = useState<number | null>(null);
   const [widgetTip, setWidgetTip] = useState<string | null>(null);
-  const [hasBattery, setHasBattery] = useState(() => localStorage.getItem("nectar-has-battery") !== "false");
   const [showPowerPulse, setShowPowerPulse] = useState(false);
   const [showLowBatteryPulse, setShowLowBatteryPulse] = useState(false);
   const [lowBatteryThreshold, setLowBatteryThreshold] = useState(() => parseInt(localStorage.getItem("nectar-low-battery-threshold") || "20"));
@@ -414,42 +484,17 @@ function App() {
 
   // Weather state (managed by useWeather hook)
 
-  // Media state
-  const [isPlaying, setIsPlaying] = useState(false);
-  const [mediaInfo, setMediaInfo] = useState<MediaInfo>({
-    title: "",
-    artist: "",
-    is_playing: false,
-    has_media: false
-  });
-  const [albumArtUrl, setAlbumArtUrl] = useState<string | null>(null);
-  const [albumArtKey, setAlbumArtKey] = useState(0);
+  // Album-art tint (state stays local: it is derived from the artwork URL)
   const [musicTheme, setMusicTheme] = useState<ArtTheme>(FALLBACK_THEME);
   const musicThemeCache = useRef(new Map<string, ArtTheme>());
-  const [volume, setVolume] = useState(0.5);
-  const [isMuted, setIsMuted] = useState(false);
   // Sliders show 0 while muted, like the overlay.
   const displayVolume = isMuted ? 0 : volume;
   // null until the first fetch so the pill doesn't flash a wrong default.
-  const [wifiStatus, setWifiStatus] = useState<WifiStatus | null>(null);
   const wifiEnabled = wifiStatus?.enabled ?? false;
   const wifiConnected = wifiStatus?.connected ?? false;
-  const [bluetoothEnabled, setBluetoothEnabled] = useState(true);
   const [settingsLegacyMode, setSettingsLegacyMode] = useState(() => localStorage.getItem("nectar-legacy-mode") === "true");
-  const [ccView, setCcView] = useState<'main' | 'wifi' | 'bluetooth' | 'audio'>('main');
   const showConnections = !settingsLegacyMode && ccView !== 'main';
-  const [lanStatus, setLanStatus] = useState<{ present: boolean; connected: boolean; name: string } | null>(null);
   const showLan = !settingsLegacyMode && !!lanStatus?.connected && !(wifiStatus?.enabled && wifiStatus.connected);
-  const [batterySaverEnabled, setBatterySaverEnabled] = useState(false);
-  const [currentBrightness, setCurrentBrightness] = useState(50);
-
-  // System metrics for status widgets
-  const [cpuUsage, setCpuUsage] = useState(0);
-  const [ramUsage, setRamUsage] = useState(0);
-  const [diskSpace, setDiskSpace] = useState(0);
-  const [netUpSpeed, setNetUpSpeed] = useState(0);
-  const [netDownSpeed, setNetDownSpeed] = useState(0);
-  const [statusWidgets, setStatusWidgets] = useState<WidgetConfig>({ left: ["weather"], right: ["battery"] });
 
   const [windowLabel, setWindowLabel] = useState<string>("");
   useEffect(() => {
@@ -497,9 +542,6 @@ function App() {
     };
   }, [windowLabel, notchMode, triggerEventPeek]);
 
-  const [isVisible, setIsVisible] = useState(true);
-  const [isImpacted, setIsImpacted] = useState(false);
-  const [isExpanded, setIsExpanded] = useState(false);
   const [startupAnimating, setStartupAnimating] = useState(false);
 
   const [dockMode, setDockMode] = useState(() => {
@@ -509,18 +551,11 @@ function App() {
   });
   const [dndActive, setDndActive] = useState(false);
   const [dockEnabled, setDockEnabled] = useState(() => localStorage.getItem("nectar-dock-enabled") !== "false");
-  const [isNotchHovered, setIsNotchHovered] = useState(false);
 
-  const [isEdgeHovered, setIsEdgeHovered] = useState(false);
-  const [isOverlapped, setIsOverlapped] = useState(false);
-  const [isFullscreen, setIsFullscreen] = useState(false);
-  const [interactionState, setInteractionState] = useState<'active' | 'grace' | 'none'>('none');
   const nectarRef = useRef<HTMLDivElement>(null);
   const dockEnabledInitial = useRef(true);
   const dockModeInitial = useRef(true);
   const notchModeInitial = useRef(true);
-
-  const [nectarMode, setNectarMode] = useState<'music' | 'calendar' | 'command-center' | 'status' | 'shelf' | 'tour'>('status');
 
   const isAnyInteraction = isHovered || isNotchHovered || isEdgeHovered;
   const isHidden = ((notchMode === 'smart' || notchMode === 'peek') && isFullscreen) ||
@@ -528,6 +563,12 @@ function App() {
       (notchMode === 'smart' && isOverlapped && interactionState === 'none') ||
       (notchMode === 'peek' && interactionState === 'none' && !eventPeek)
     ));
+
+  // Tell the Rust side to stop the WASAPI capture while there is nothing on
+  // screen to draw it, so a game or a hidden notch costs no CPU.
+  useEffect(() => {
+    invoke("set_notch_visible", { visible: !(isHidden || isFullscreen) }).catch(() => {});
+  }, [isHidden, isFullscreen]);
 
   useEffect(() => {
     if (isAnyInteraction) {
@@ -1339,8 +1380,10 @@ function App() {
     return () => clearInterval(interval);
   }, [nectarMode, refreshWifiStatus]);
 
-  // Load bluetooth/volume/brightness state on mount
+  // Load bluetooth/volume/brightness state on mount, and keep it fresh only while
+  // the notch is actually on screen (hidden or fullscreen = no consumer).
   useEffect(() => {
+    if (isHidden || isFullscreen) return;
     invoke<boolean>("get_bluetooth_state").then(setBluetoothEnabled).catch(() => { });
     invoke<boolean>("get_battery_saver_state").then(setBatterySaverEnabled).catch(() => { });
     invoke<boolean>("has_battery").then((present) => {
@@ -1357,10 +1400,11 @@ function App() {
       invoke<boolean>("get_battery_saver_state").then(setBatterySaverEnabled).catch(() => { });
     }, 5000);
     return () => clearInterval(interval);
-  }, []);
+  }, [isHidden, isFullscreen, setBluetoothEnabled, setBatterySaverEnabled, setHasBattery, setVolume, setIsMuted, setCurrentBrightness]);
 
   // Poll system metrics for status widgets
   useEffect(() => {
+    if (isHidden || isFullscreen) return;
     const fetchMetrics = () => {
       invoke<number>("get_cpu_usage").then(setCpuUsage).catch((e) => console.warn("CPU:", e));
       invoke<number>("get_ram_usage").then(setRamUsage).catch((e) => console.warn("RAM:", e));
@@ -1373,7 +1417,7 @@ function App() {
     fetchMetrics();
     const interval = setInterval(fetchMetrics, 3000);
     return () => clearInterval(interval);
-  }, []);
+  }, [isHidden, isFullscreen, setCpuUsage, setRamUsage, setDiskSpace, setNetUpSpeed, setNetDownSpeed]);
 
   // Listen for brightness changes
   useEffect(() => {
@@ -1383,58 +1427,51 @@ function App() {
     return () => { unlisten.then(fn => fn()); };
   }, []);
 
-  const [mediaSessions, setMediaSessions] = useState<{ id: string; name: string; title: string; is_playing: boolean; active: boolean }[]>([]);
   useEffect(() => {
     const unlisten = listen<typeof mediaSessions>("media-sessions", (event) => setMediaSessions(event.payload ?? []));
     return () => { unlisten.then(fn => fn()); };
-  }, []);
+  }, [setMediaSessions]);
 
   // Native Windows Media Controls - Listen for updates from background worker
+  // A ref mirrors the latest media state so the listener does not have to
+  // re-subscribe, and no dispatch happens inside another updater.
+  const mediaRef = useRef(media);
+  useEffect(() => {
+    mediaRef.current = media;
+  }, [media]);
+
   useEffect(() => {
     const unlisten = listen<MediaInfo>("media-update", (event) => {
       const info = event.payload;
       if (!info) return;
 
-      setMediaInfo(prev => {
-        // Find if artwork changed by checking the first element
-        const prevArt = prev.artwork?.[0];
-        const nextArt = info.artwork?.[0];
-        const artChanged = prevArt !== nextArt;
+      const prev = mediaRef.current;
+      const newArt = info.artwork && info.artwork.length > 0 ? info.artwork[0] : null;
 
-        if (prev.title === info.title &&
-          prev.artist === info.artist &&
-          prev.is_playing === info.is_playing &&
-          prev.has_media === info.has_media &&
-          !artChanged &&
-          prev.position_ms === info.position_ms &&
-          prev.duration_ms === info.duration_ms) {
-          return prev;
-        }
+      if (
+        prev.mediaInfo.title === info.title &&
+        prev.mediaInfo.artist === info.artist &&
+        prev.mediaInfo.is_playing === info.is_playing &&
+        prev.mediaInfo.has_media === info.has_media &&
+        prev.albumArtUrl === newArt &&
+        prev.mediaInfo.position_ms === info.position_ms &&
+        prev.mediaInfo.duration_ms === info.duration_ms
+      ) {
+        return;
+      }
 
-        // Update playing state separately for the hook triggers
-        setIsPlaying(info.is_playing);
-
-        if (info.artwork && info.artwork.length > 0) {
-          const newArt = info.artwork[0];
-          setAlbumArtUrl(prev => {
-            if (prev !== newArt) {
-              setAlbumArtKey(k => k + 1);
-              return newArt;
-            }
-            return prev;
-          });
-        } else {
-          setAlbumArtUrl(null);
-        }
-
-        return info;
-      });
+      setMediaInfo(info);
+      setIsPlaying(info.is_playing);
+      if (newArt !== prev.albumArtUrl) {
+        setAlbumArtUrl(newArt);
+        if (newArt) setAlbumArtKey(k => k + 1);
+      }
     });
 
     return () => {
       unlisten.then(fn => fn());
     };
-  }, []);
+  }, [setMediaInfo, setIsPlaying, setAlbumArtUrl, setAlbumArtKey]);
 
   // Media controls via Tauri commands
   /* Unused saveAndBroadcast removed to fix TS build error */
@@ -2740,6 +2777,18 @@ function BatterySaverIcon() {
       <path d="M22 11v2" />
       <path d="M6 12h4l2-3v6l-2-3H6" />
     </svg>
+  );
+}
+
+function App() {
+  return (
+    <MediaProvider>
+      <SystemProvider>
+        <UiProvider>
+          <AppNotch />
+        </UiProvider>
+      </SystemProvider>
+    </MediaProvider>
   );
 }
 

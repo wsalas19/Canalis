@@ -567,6 +567,7 @@ fn audio_visualization_wanted(app: &AppHandle) -> bool {
     let setting = crate::utils::get_setting_str(app, "nectar-media-visualizer-enabled")
         .or_else(|| crate::utils::get_setting_str(app, "nectar-visualizer-enabled"));
     ANY_MEDIA_PLAYING.load(Ordering::Relaxed)
+        && NOTCH_VISIBLE.load(Ordering::Relaxed)
         && setting.as_deref() != Some("false")
         && !AUDIO_CAPTURE_REFUSED.load(Ordering::Relaxed)
         && !microphone_blocked()
@@ -647,6 +648,9 @@ pub fn setup_audio_visualization(app_handle: AppHandle) {
                     let mut fft_buffer = vec![0.0f32; FFT_SIZE];
                     let mut fft_input: Vec<rustfft::num_complex::Complex<f32>> = vec![rustfft::num_complex::Complex::new(0.0, 0.0); FFT_SIZE];
                     let mut buffer_pos = 0;
+                    // ~94 FFT windows/s at 48 kHz; every 3rd is ~31 Hz, more than
+                    // enough for five bars and a third of the IPC traffic.
+                    let mut emit_tick: u32 = 0;
 
                     let mut planner = rustfft::FftPlanner::<f32>::new();
                     let fft = planner.plan_fft_forward(FFT_SIZE);
@@ -654,6 +658,11 @@ pub fn setup_audio_visualization(app_handle: AppHandle) {
                     let mut last_device_check = std::time::Instant::now();
                     let mut idle_since = std::time::Instant::now();
                     loop {
+                        if !NOTCH_VISIBLE.load(Ordering::Relaxed) {
+                            // Nothing on screen to draw: end the capture session and
+                            // let the outer loop park until the notch is visible again.
+                            return Ok(());
+                        }
                         let idle = !ANY_MEDIA_PLAYING.load(Ordering::Relaxed);
                         if !idle {
                             idle_since = std::time::Instant::now();
@@ -775,7 +784,10 @@ pub fn setup_audio_visualization(app_handle: AppHandle) {
                                             output[band_idx] = output[band_idx].clamp(0.18, 1.0);
                                             prev_values[band_idx] = output[band_idx];
                                         }
-                                        let _ = app_handle.emit("audio-visualization", AudioVisualizationData { frequencies: output.to_vec() });
+                                        emit_tick = emit_tick.wrapping_add(1);
+                                        if emit_tick % 3 == 0 {
+                                            let _ = app_handle.emit("audio-visualization", AudioVisualizationData { frequencies: output.to_vec() });
+                                        }
                                         buffer_pos = 0;
                                     }
                                 }

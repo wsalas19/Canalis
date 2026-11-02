@@ -172,9 +172,36 @@ pub fn current_state(app: &AppHandle) -> CalendarState {
     state_from(app, &read_store(app))
 }
 
+static LAST_EMIT_FINGERPRINT: std::sync::Mutex<Option<u64>> = std::sync::Mutex::new(None);
+
+// Cheap FNV over the serialized state. Re-emitting an identical payload wakes
+// every window for nothing, and a sync usually changes nothing.
+fn fingerprint(state: &CalendarState) -> u64 {
+    let json = serde_json::to_string(state).unwrap_or_default();
+    let mut hash: u64 = 0xcbf2_9ce4_8422_2325;
+    for byte in json.as_bytes() {
+        hash ^= u64::from(*byte);
+        hash = hash.wrapping_mul(0x100_0000_01b3);
+    }
+    hash
+}
+
 pub fn emit_state(app: &AppHandle) -> CalendarState {
     let state = current_state(app);
-    let _ = app.emit("caldav-updated", &state);
+    let print = fingerprint(&state);
+    let changed = match LAST_EMIT_FINGERPRINT.lock() {
+        Ok(mut last) => {
+            let changed = *last != Some(print);
+            if changed {
+                *last = Some(print);
+            }
+            changed
+        }
+        Err(_) => true,
+    };
+    if changed {
+        let _ = app.emit("caldav-updated", &state);
+    }
     state
 }
 
