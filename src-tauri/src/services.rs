@@ -819,6 +819,27 @@ pub fn setup_audio_visualization(app_handle: AppHandle) {
     });
 }
 
+/// SMTC event handler that only wakes the media poll. Each WinRT event carries
+/// its own sender/args types, inferred at the call site.
+fn media_wake_handler<T, A>() -> windows::Foundation::TypedEventHandler<T, A>
+where
+    T: windows::core::RuntimeType + 'static,
+    A: windows::core::RuntimeType + 'static,
+{
+    windows::Foundation::TypedEventHandler::new(|_, _| {
+        MEDIA_REFRESH.store(true, Ordering::Relaxed);
+        Ok(())
+    })
+}
+
+fn session_raw(session: &windows::Media::Control::GlobalSystemMediaTransportControlsSession) -> isize {
+    use windows::core::Interface;
+    session
+        .cast::<windows::core::IUnknown>()
+        .map(|u| u.as_raw() as isize)
+        .unwrap_or(0)
+}
+
 pub fn setup_system_worker(app_handle: AppHandle) -> Sender<SystemCommand> {
     let (tx, rx) = channel::<SystemCommand>();
     let handle_system = app_handle.clone();
@@ -852,6 +873,14 @@ pub fn setup_system_worker(app_handle: AppHandle) -> Sender<SystemCommand> {
             let mut last_volume: f32 = -1.0;
             let mut last_sessions_json = String::new();
             let mut last_muted: bool = false;
+            // Session whose change events are bound; kept alive so its handlers stay valid.
+            let mut bound_session: Option<windows::Media::Control::GlobalSystemMediaTransportControlsSession> = None;
+            let mut bound_raw: isize = 0;
+            // SMTC serves the previous track's thumbnail for a moment after a
+            // change; retry the artwork read instead of showing the wrong cover.
+            let mut art_retry_at: Option<std::time::Instant> = None;
+            let mut stale_art_reads: u32 = 0;
+            let mut prev_art: Option<String> = None;
 
             // Only hide the native flyout when our overlay replaces it.
             let hide_osd = |overlay_key: &str| {
@@ -882,7 +911,13 @@ pub fn setup_system_worker(app_handle: AppHandle) -> Sender<SystemCommand> {
                     }
                 }
 
-                if manager.is_none() { manager = GlobalSystemMediaTransportControlsSessionManager::RequestAsync().and_then(|op| op.get()).ok(); }
+                if manager.is_none() {
+                    manager = GlobalSystemMediaTransportControlsSessionManager::RequestAsync().and_then(|op| op.get()).ok();
+                    if let Some(ref mgr) = manager {
+                        // A session appearing/disappearing wakes the loop immediately.
+                        let _ = mgr.CurrentSessionChanged(&media_wake_handler());
+                    }
+                }
                 while let Ok(cmd) = rx.try_recv() {
                     // Only the volume commands need the audio endpoint, the rest must work with no output device.
                     {
@@ -951,8 +986,13 @@ pub fn setup_system_worker(app_handle: AppHandle) -> Sender<SystemCommand> {
                         }
                     }
                 }
-                if last_processed_media.elapsed().as_millis() >= 2000 || MEDIA_REFRESH.swap(false, Ordering::Relaxed) {
+                let art_due = art_retry_at.is_some_and(|t| std::time::Instant::now() >= t);
+                if crate::state::NOTCH_VISIBLE.load(Ordering::Relaxed)
+                    && (MEDIA_REFRESH.swap(false, Ordering::Relaxed) || art_due || last_processed_media.elapsed().as_secs() >= 5)
+                {
                     last_processed_media = std::time::Instant::now();
+                    let art_retry = art_due;
+                    if art_due { art_retry_at = None; }
                     let mut best_info: Option<MediaInfo> = None;
                     if let Some(ref mgr) = manager {
                         if let Ok(sessions) = mgr.GetSessions() {
@@ -987,6 +1027,19 @@ pub fn setup_system_worker(app_handle: AppHandle) -> Sender<SystemCommand> {
                                 let _ = handle_system.emit("media-sessions", list);
                                 last_sessions_json = list_json;
                             }
+                            if let Some(i) = chosen_i {
+                                if let Ok(active) = sessions.GetAt(i) {
+                                    let raw = session_raw(&active);
+                                    if raw != bound_raw {
+                                        let _ = active.MediaPropertiesChanged(&media_wake_handler());
+                                        let _ = active.PlaybackInfoChanged(&media_wake_handler());
+                                        let _ = active.TimelinePropertiesChanged(&media_wake_handler());
+                                        bound_raw = raw;
+                                        // Keep the session alive so its handlers stay registered.
+                                        let _previous = bound_session.replace(active);
+                                    }
+                                }
+                            }
                             for i in 0..sessions.Size().unwrap_or(0) {
                                 if Some(i) != chosen_i { continue; }
                                 if let Ok(session) = sessions.GetAt(i) {
@@ -995,17 +1048,26 @@ pub fn setup_system_worker(app_handle: AppHandle) -> Sender<SystemCommand> {
                                         let title = props.Title().unwrap_or_default().to_string();
                                         if !title.is_empty() {
                                             let artist = props.Artist().unwrap_or_default().to_string();
+                                            // A new track starts a fresh art-retry budget.
+                                            if last_emitted_info
+                                                .as_ref()
+                                                .is_none_or(|(t, a, _, _, _, _, _)| t != &title || a != &artist)
+                                            {
+                                                stale_art_reads = 0;
+                                            }
                                             let mut artwork = None;
                                             let mut got_art_from_cache = false;
-                                            if let Some((ref last_title, ref last_artist, _, _, ref last_art, _, _)) = last_emitted_info {
-                                                if last_title == &title && last_artist == &artist {
-                                                    artwork = last_art.as_ref().map(|art| vec![art.clone()]);
-                                                    got_art_from_cache = true;
+                                            if !art_retry {
+                                                if let Some((ref last_title, ref last_artist, _, _, ref last_art, _, _)) = last_emitted_info {
+                                                    if last_title == &title && last_artist == &artist {
+                                                        artwork = last_art.as_ref().map(|art| vec![art.clone()]);
+                                                        got_art_from_cache = true;
+                                                    }
                                                 }
                                             }
 
                                             if !got_art_from_cache {
-                                                artwork = (|| -> Option<Vec<String>> {
+                                                let read = (|| -> Option<String> {
                                                     let stream = props.Thumbnail().ok()?.OpenReadAsync().ok()?.get().ok()?;
                                                     let content_type = stream.ContentType().ok()?.to_string().split(',').next().unwrap_or("image/jpeg").trim().to_string();
                                                     let reader = DataReader::CreateDataReader(&stream).ok()?;
@@ -1019,8 +1081,28 @@ pub fn setup_system_worker(app_handle: AppHandle) -> Sender<SystemCommand> {
                                                         all_bytes.extend_from_slice(&chunk);
                                                     }
                                                     if all_bytes.is_empty() { return None; }
-                                                    Some(vec![format!("data:{};base64,{}", content_type, general_purpose::STANDARD.encode(all_bytes))])
+                                                    Some(format!("data:{};base64,{}", content_type, general_purpose::STANDARD.encode(all_bytes)))
                                                 })();
+
+                                                match read {
+                                                    Some(art) if prev_art.as_ref() == Some(&art) && stale_art_reads < 5 => {
+                                                        // Byte-identical to the previous track's cover: SMTC is
+                                                        // still serving the old stream. Keep the panel art-less
+                                                        // and retry instead of showing the wrong cover.
+                                                        stale_art_reads += 1;
+                                                        art_retry_at = Some(std::time::Instant::now() + std::time::Duration::from_millis(400));
+                                                    }
+                                                    Some(art) => {
+                                                        stale_art_reads = 0;
+                                                        prev_art = Some(art.clone());
+                                                        artwork = Some(vec![art]);
+                                                    }
+                                                    None if stale_art_reads < 5 => {
+                                                        stale_art_reads += 1;
+                                                        art_retry_at = Some(std::time::Instant::now() + std::time::Duration::from_millis(400));
+                                                    }
+                                                    None => {}
+                                                }
                                             }
 
                                             // Extract timeline properties for progress bar

@@ -2146,16 +2146,16 @@ pub fn select_media_session(id: Option<String>) {
 }
 
 #[tauri::command]
-pub fn media_play_pause() { if let Some(sender) = COMMAND_SENDER.get() { let _ = sender.send(crate::types::SystemCommand::MediaPlayPause); } }
+pub fn media_play_pause() { if let Some(sender) = COMMAND_SENDER.get() { let _ = sender.send(crate::types::SystemCommand::MediaPlayPause); } crate::services::MEDIA_REFRESH.store(true, Ordering::Relaxed); }
 
 #[tauri::command]
-pub fn media_next() { if let Some(sender) = COMMAND_SENDER.get() { let _ = sender.send(crate::types::SystemCommand::MediaNext); } }
+pub fn media_next() { if let Some(sender) = COMMAND_SENDER.get() { let _ = sender.send(crate::types::SystemCommand::MediaNext); } crate::services::MEDIA_REFRESH.store(true, Ordering::Relaxed); }
 
 #[tauri::command]
-pub fn media_previous() { if let Some(sender) = COMMAND_SENDER.get() { let _ = sender.send(crate::types::SystemCommand::MediaPrevious); } }
+pub fn media_previous() { if let Some(sender) = COMMAND_SENDER.get() { let _ = sender.send(crate::types::SystemCommand::MediaPrevious); } crate::services::MEDIA_REFRESH.store(true, Ordering::Relaxed); }
 
 #[tauri::command]
-pub fn media_seek(position_ms: f64) { if let Some(sender) = COMMAND_SENDER.get() { let _ = sender.send(crate::types::SystemCommand::MediaSeek(position_ms as i64)); } }
+pub fn media_seek(position_ms: f64) { if let Some(sender) = COMMAND_SENDER.get() { let _ = sender.send(crate::types::SystemCommand::MediaSeek(position_ms as i64)); } crate::services::MEDIA_REFRESH.store(true, Ordering::Relaxed); }
 
 #[derive(serde::Serialize)]
 pub struct AppMediaSession {
@@ -2877,6 +2877,10 @@ const MONITOR_TARGETING_KEYS: [&str; 5] = [
 #[tauri::command]
 pub fn set_notch_visible(visible: bool) {
     crate::state::NOTCH_VISIBLE.store(visible, std::sync::atomic::Ordering::Relaxed);
+    // Re-read media the moment the notch comes back, so the pill is not stale.
+    if visible {
+        crate::services::MEDIA_REFRESH.store(true, std::sync::atomic::Ordering::Relaxed);
+    }
 }
 
 #[tauri::command]
