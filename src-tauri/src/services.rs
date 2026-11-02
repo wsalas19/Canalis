@@ -13,6 +13,56 @@ use wmi::{COMLibrary, WMIConnection};
 
 static KEYBOARD_HOOK_APP_HANDLE: OnceLock<AppHandle> = OnceLock::new();
 
+/// Wake the foreground/fullscreen watcher after a window event. Throttled: a
+/// window drag fires LOCATIONCHANGE at frame rate, and one recompute per 100 ms
+/// is plenty for fullscreen detection.
+pub fn wake_visibility_worker() {
+    static LAST_WAKE: AtomicI64 = AtomicI64::new(0);
+    let now = crate::utils::get_now_ms();
+    let last = LAST_WAKE.swap(now, Ordering::Relaxed);
+    if last != 0 && now - last < 100 {
+        return;
+    }
+    if let Some(thread) = crate::state::VISIBILITY_WORKER.get() {
+        thread.unpark();
+    }
+}
+
+/// Wake the media worker after an SMTC event, a control command or a settings change.
+pub fn wake_media_worker() {
+    if let Some(thread) = crate::state::MEDIA_WORKER.get() {
+        thread.unpark();
+    }
+}
+
+/// Wake the window-style corrective pass (throttled; events can arrive in bursts).
+pub fn wake_style_guard() {
+    static LAST_WAKE: AtomicI64 = AtomicI64::new(0);
+    let now = crate::utils::get_now_ms();
+    let last = LAST_WAKE.swap(now, Ordering::Relaxed);
+    if last != 0 && now - last < 250 {
+        return;
+    }
+    if let Some(thread) = crate::state::STYLE_GUARD_WORKER.get() {
+        thread.unpark();
+    }
+}
+
+/// Wake the volume-mixer watchdog when the card opens.
+pub fn wake_mixer_watchdog() {
+    if let Some(thread) = crate::state::MIXER_WATCHDOG.get() {
+        thread.unpark();
+    }
+}
+
+/// Send a control to the system worker and unpark it, so a parked loop reacts at once.
+pub fn send_system_command(command: SystemCommand) {
+    if let Some(sender) = crate::state::COMMAND_SENDER.get() {
+        let _ = sender.send(command);
+    }
+    wake_media_worker();
+}
+
 /// Whether a HUD overlay is enabled. When it's off, its keys and the native flyout stay with Windows.
 fn overlay_enabled(app: &AppHandle, key: &str) -> bool {
     crate::utils::get_setting_str(app, key).map(|v| v != "false").unwrap_or(true)
@@ -184,25 +234,21 @@ fn handle_volume_key_event(vk_code: windows::Win32::UI::Input::KeyboardAndMouse:
     let last = LAST_TIME.load(std::sync::atomic::Ordering::Relaxed);
     if now - last < 50 { return; }
     LAST_TIME.store(now, std::sync::atomic::Ordering::Relaxed);
-    if let Some(sender) = crate::state::COMMAND_SENDER.get() {
-        use windows::Win32::UI::Input::KeyboardAndMouse::{VK_VOLUME_MUTE, VK_VOLUME_UP, VK_VOLUME_DOWN};
-        let cmd = match vk_code {
-            VK_VOLUME_MUTE => Some(SystemCommand::VolumeMute),
-            VK_VOLUME_UP => Some(SystemCommand::VolumeUp),
-            VK_VOLUME_DOWN => Some(SystemCommand::VolumeDown),
-            _ => None,
-        };
-        if let Some(cmd) = cmd { let _ = sender.send(cmd); }
-    }
+    use windows::Win32::UI::Input::KeyboardAndMouse::{VK_VOLUME_MUTE, VK_VOLUME_UP, VK_VOLUME_DOWN};
+    let cmd = match vk_code {
+        VK_VOLUME_MUTE => Some(SystemCommand::VolumeMute),
+        VK_VOLUME_UP => Some(SystemCommand::VolumeUp),
+        VK_VOLUME_DOWN => Some(SystemCommand::VolumeDown),
+        _ => None,
+    };
+    if let Some(cmd) = cmd { send_system_command(cmd); }
 }
 
 fn handle_brightness_key_event(vk_code: windows::Win32::UI::Input::KeyboardAndMouse::VIRTUAL_KEY) {
-    if let Some(sender) = crate::state::COMMAND_SENDER.get() {
-        let cmd = if vk_code.0 == 0x216 { Some(SystemCommand::BrightnessDown) }
-        else if vk_code.0 == 0x217 { Some(SystemCommand::BrightnessUp) }
-        else { None };
-        if let Some(cmd) = cmd { let _ = sender.send(cmd); }
-    }
+    let cmd = if vk_code.0 == 0x216 { Some(SystemCommand::BrightnessDown) }
+    else if vk_code.0 == 0x217 { Some(SystemCommand::BrightnessUp) }
+    else { None };
+    if let Some(cmd) = cmd { send_system_command(cmd); }
 }
 use crate::types::*;
 use crate::state::*;
@@ -307,6 +353,8 @@ unsafe extern "system" fn window_change_event_proc(
             && (event == EVENT_OBJECT_SHOW || event == EVENT_OBJECT_HIDE || event == EVENT_OBJECT_DESTROY)
         {
             CAPTURE_RECHECK.store(true, Ordering::Relaxed);
+            wake_visibility_worker();
+            wake_style_guard();
         }
     }
 
@@ -383,6 +431,8 @@ unsafe extern "system" fn focus_event_proc(
     if hwnd.0.is_null() { return; }
     // Foreground moved — e.g. Snipping Tool opened/closed or got minimised.
     CAPTURE_RECHECK.store(true, Ordering::Relaxed);
+    wake_visibility_worker();
+    wake_style_guard();
     use windows::Win32::UI::WindowsAndMessaging::{IsWindow, GetWindowLongW, GWL_EXSTYLE, WS_EX_TOOLWINDOW};
 
     if !IsWindow(Some(hwnd)).as_bool() { return; }
@@ -464,6 +514,8 @@ unsafe extern "system" fn thumbnail_capture_proc(
 
     // Only restore matters. On minimize start the window is mid-animation and
     // PrintWindow can grab a black frame over a good thumbnail.
+    wake_visibility_worker();
+    wake_style_guard();
     if event != windows::Win32::UI::WindowsAndMessaging::EVENT_SYSTEM_MINIMIZEEND { return; }
 
     use windows::Win32::UI::WindowsAndMessaging::{IsWindow, GetWindowLongW, GWL_EXSTYLE, WS_EX_TOOLWINDOW};
@@ -523,6 +575,13 @@ unsafe extern "system" fn taskbar_event_proc(
     _dw_event_thread: u32,
     _dwms_event_time: u32,
 ) {
+    // A foreground window being moved/resized can enter or leave fullscreen
+    // without a foreground change; wake the watcher for that case only.
+    unsafe {
+        if windows::Win32::UI::WindowsAndMessaging::GetForegroundWindow() == hwnd {
+            wake_visibility_worker();
+        }
+    }
     if NATIVE_TASKBAR_HIDDEN.load(Ordering::Relaxed) {
         let mut class_name = [0u8; 256];
         let len = windows::Win32::UI::WindowsAndMessaging::GetClassNameA(hwnd, &mut class_name);
@@ -828,6 +887,7 @@ where
 {
     windows::Foundation::TypedEventHandler::new(|_, _| {
         MEDIA_REFRESH.store(true, Ordering::Relaxed);
+        wake_media_worker();
         Ok(())
     })
 }
@@ -840,10 +900,83 @@ fn session_raw(session: &windows::Media::Control::GlobalSystemMediaTransportCont
         .unwrap_or(0)
 }
 
+fn hide_native_osd(app: &AppHandle, overlay_key: &str) {
+    if !overlay_enabled(app, overlay_key) { return; }
+    unsafe {
+        use windows::Win32::UI::WindowsAndMessaging::{FindWindowA, ShowWindow, SW_HIDE};
+        let class1 = windows::core::PCSTR(c"NativeHWNDHost".as_ptr() as *const u8);
+        if let Ok(hwnd1) = FindWindowA(class1, windows::core::PCSTR::null()) { let _ = ShowWindow(hwnd1, SW_HIDE); }
+    }
+}
+
+/// Volume/mute changes arrive as events instead of the 64 ms poll the worker used to do.
+#[windows::core::implement(windows::Win32::Media::Audio::Endpoints::IAudioEndpointVolumeCallback)]
+struct VolumeNotifier {
+    app: AppHandle,
+    endpoint: windows::Win32::Media::Audio::Endpoints::IAudioEndpointVolume,
+}
+
+impl windows::Win32::Media::Audio::Endpoints::IAudioEndpointVolumeCallback_Impl for VolumeNotifier_Impl {
+    fn OnNotify(&self, _data: *mut windows::Win32::Media::Audio::AUDIO_VOLUME_NOTIFICATION_DATA) -> windows::core::Result<()> {
+        unsafe {
+            if let (Ok(volume), Ok(muted)) = (self.endpoint.GetMasterVolumeLevelScalar(), self.endpoint.GetMute()) {
+                crate::state::CURRENT_VOLUME.store((volume * 100.0) as u32, Ordering::Relaxed);
+                let _ = self.app.emit("volume-change", VolumeChangeEvent { volume, is_muted: muted.as_bool() });
+                hide_native_osd(&self.app, "nectar-volume-overlay-enabled");
+            }
+        }
+        Ok(())
+    }
+}
+
+/// Default-device changes wake the worker instead of it re-checking every two seconds.
+#[windows::core::implement(windows::Win32::Media::Audio::IMMNotificationClient)]
+struct DeviceNotifier;
+
+impl windows::Win32::Media::Audio::IMMNotificationClient_Impl for DeviceNotifier_Impl {
+    fn OnDeviceStateChanged(&self, _id: &windows::core::PCWSTR, _state: windows::Win32::Media::Audio::DEVICE_STATE) -> windows::core::Result<()> {
+        crate::state::DEVICE_DIRTY.store(true, Ordering::Relaxed);
+        wake_media_worker();
+        Ok(())
+    }
+
+    fn OnDeviceAdded(&self, _id: &windows::core::PCWSTR) -> windows::core::Result<()> {
+        crate::state::DEVICE_DIRTY.store(true, Ordering::Relaxed);
+        wake_media_worker();
+        Ok(())
+    }
+
+    fn OnDeviceRemoved(&self, _id: &windows::core::PCWSTR) -> windows::core::Result<()> {
+        crate::state::DEVICE_DIRTY.store(true, Ordering::Relaxed);
+        wake_media_worker();
+        Ok(())
+    }
+
+    fn OnDefaultDeviceChanged(
+        &self,
+        flow: windows::Win32::Media::Audio::EDataFlow,
+        role: windows::Win32::Media::Audio::ERole,
+        _id: &windows::core::PCWSTR,
+    ) -> windows::core::Result<()> {
+        use windows::Win32::Media::Audio::{eConsole, eRender};
+        if flow.0 == eRender.0 && role.0 == eConsole.0 {
+            crate::state::DEVICE_DIRTY.store(true, Ordering::Relaxed);
+            wake_media_worker();
+        }
+        Ok(())
+    }
+
+    fn OnPropertyValueChanged(&self, _id: &windows::core::PCWSTR, _key: &windows::Win32::Foundation::PROPERTYKEY) -> windows::core::Result<()> {
+        Ok(())
+    }
+}
+
 pub fn setup_system_worker(app_handle: AppHandle) -> Sender<SystemCommand> {
     let (tx, rx) = channel::<SystemCommand>();
     let handle_system = app_handle.clone();
-    std::thread::spawn(move || {
+    let media_thread = std::thread::Builder::new()
+        .name("system-worker".into())
+        .spawn(move || {
         use windows::Win32::System::Com::{CoInitializeEx, COINIT_MULTITHREADED, CoCreateInstance, CLSCTX_ALL, CoTaskMemFree};
         use windows::Win32::Media::Audio::{IMMDeviceEnumerator, eRender, eConsole};
         use windows::Win32::Media::Audio::Endpoints::IAudioEndpointVolume;
@@ -865,14 +998,32 @@ pub fn setup_system_worker(app_handle: AppHandle) -> Sender<SystemCommand> {
                 }
             }
 
+            // Volume/mute and default-device changes arrive as COM callbacks.
+            let mut volume_notifier: Option<windows::Win32::Media::Audio::Endpoints::IAudioEndpointVolumeCallback> = None;
+            if let Some(endpoint) = audio_endpoint_volume.as_ref() {
+                let callback: windows::Win32::Media::Audio::Endpoints::IAudioEndpointVolumeCallback =
+                    VolumeNotifier { app: handle_system.clone(), endpoint: endpoint.clone() }.into();
+                let _ = endpoint.RegisterControlChangeNotify(&callback);
+                volume_notifier = Some(callback);
+            }
+            let device_notifier: windows::Win32::Media::Audio::IMMNotificationClient = DeviceNotifier.into();
+            if let Some(enum_ref) = enumerator.as_ref() {
+                let _ = enum_ref.RegisterEndpointNotificationCallback(&device_notifier);
+            }
+            // The poll used to publish the initial level; do one read here instead.
+            if let Some(endpoint) = audio_endpoint_volume.as_ref() {
+                if let (Ok(volume), Ok(muted)) = (endpoint.GetMasterVolumeLevelScalar(), endpoint.GetMute()) {
+                    crate::state::CURRENT_VOLUME.store((volume * 100.0) as u32, Ordering::Relaxed);
+                    let _ = handle_system.emit("volume-change", VolumeChangeEvent { volume, is_muted: muted.as_bool() });
+                }
+            }
+
             let mut manager = GlobalSystemMediaTransportControlsSessionManager::RequestAsync().and_then(|op| op.get()).ok();
             let mut last_processed_media = std::time::Instant::now();
             let mut last_device_check = std::time::Instant::now();
             #[allow(clippy::type_complexity)]
             let mut last_emitted_info: Option<(String, String, String, bool, bool, Option<String>, i64, i64)> = None;
-            let mut last_volume: f32 = -1.0;
             let mut last_sessions_json = String::new();
-            let mut last_muted: bool = false;
             // Session whose change events are bound; kept alive so its handlers stay valid.
             let mut bound_session: Option<windows::Media::Control::GlobalSystemMediaTransportControlsSession> = None;
             let mut bound_raw: isize = 0;
@@ -883,16 +1034,12 @@ pub fn setup_system_worker(app_handle: AppHandle) -> Sender<SystemCommand> {
             let mut prev_art: Option<String> = None;
 
             // Only hide the native flyout when our overlay replaces it.
-            let hide_osd = |overlay_key: &str| {
-                if !overlay_enabled(&handle_system, overlay_key) { return; }
-                use windows::Win32::UI::WindowsAndMessaging::{FindWindowA, ShowWindow, SW_HIDE};
-                let class1 = windows::core::PCSTR(c"NativeHWNDHost".as_ptr() as *const u8);
-                if let Ok(hwnd1) = FindWindowA(class1, windows::core::PCSTR::null()) { let _ = ShowWindow(hwnd1, SW_HIDE); }
-            };
+            let hide_osd = |overlay_key: &str| hide_native_osd(&handle_system, overlay_key);
 
             loop {
-                // Check for device change
-                if last_device_check.elapsed().as_secs() >= 2 {
+                // Default-device changes are pushed by IMMNotificationClient; this
+                // is the fallback for a missed notification.
+                if crate::state::DEVICE_DIRTY.swap(false, Ordering::Relaxed) || last_device_check.elapsed().as_secs() >= 10 {
                     last_device_check = std::time::Instant::now();
                     if let Some(ref enum_ref) = enumerator {
                         if let Ok(new_device) = enum_ref.GetDefaultAudioEndpoint(eRender, eConsole) {
@@ -900,11 +1047,23 @@ pub fn setup_system_worker(app_handle: AppHandle) -> Sender<SystemCommand> {
                                 let new_id = windows::core::PCWSTR::from_raw(id.0).to_string().unwrap_or_default();
                                 CoTaskMemFree(Some(id.0 as *const _));
                                 if new_id != current_device_id || audio_endpoint_volume.is_none() {
+                                    if let (Some(old), Some(notifier)) = (audio_endpoint_volume.as_ref(), volume_notifier.as_ref()) {
+                                        let _ = old.UnregisterControlChangeNotify(notifier);
+                                    }
                                     current_device_id = new_id;
                                     device = Some(new_device);
                                     audio_endpoint_volume = device.as_ref().and_then(|d| d.Activate::<IAudioEndpointVolume>(CLSCTX_ALL, None).ok());
-                                    // Reset last_volume to force an update event
-                                    last_volume = -1.0;
+                                    volume_notifier = None;
+                                    if let Some(endpoint) = audio_endpoint_volume.as_ref() {
+                                        let callback: windows::Win32::Media::Audio::Endpoints::IAudioEndpointVolumeCallback =
+                                            VolumeNotifier { app: handle_system.clone(), endpoint: endpoint.clone() }.into();
+                                        let _ = endpoint.RegisterControlChangeNotify(&callback);
+                                        volume_notifier = Some(callback);
+                                        if let (Ok(volume), Ok(muted)) = (endpoint.GetMasterVolumeLevelScalar(), endpoint.GetMute()) {
+                                            crate::state::CURRENT_VOLUME.store((volume * 100.0) as u32, Ordering::Relaxed);
+                                            let _ = handle_system.emit("volume-change", VolumeChangeEvent { volume, is_muted: muted.as_bool() });
+                                        }
+                                    }
                                 }
                             }
                         }
@@ -972,17 +1131,6 @@ pub fn setup_system_worker(app_handle: AppHandle) -> Sender<SystemCommand> {
                                 if let Some(tx) = BRIGHTNESS_SENDER.get() { let _ = tx.send(new_val); }
                                 hide_osd("nectar-brightness-overlay-enabled");
                             }
-                        }
-                    }
-                }
-                if let Some(ref aev) = audio_endpoint_volume {
-                    if let (Ok(vol), Ok(muted)) = (aev.GetMasterVolumeLevelScalar(), aev.GetMute()) {
-                        let is_muted: bool = muted.into();
-                        if (vol - last_volume).abs() > 0.001 || is_muted != last_muted {
-                            last_volume = vol; last_muted = is_muted;
-                            crate::state::CURRENT_VOLUME.store((vol * 100.0) as u32, Ordering::Relaxed);
-                            let _ = handle_system.emit("volume-change", VolumeChangeEvent { volume: vol, is_muted });
-                            hide_osd("nectar-volume-overlay-enabled");
                         }
                     }
                 }
@@ -1157,10 +1305,21 @@ pub fn setup_system_worker(app_handle: AppHandle) -> Sender<SystemCommand> {
                         last_emitted_info = Some((current.title, current.artist, current.album, current.is_playing, current.has_media, art_str, current.position_ms, current.duration_ms));
                     }
                 }
-                std::thread::sleep(std::time::Duration::from_millis(64));
+                // Park until the next deadline; SMTC events, device changes and
+                // control commands unpark this thread immediately.
+                let now = std::time::Instant::now();
+                let mut wait = std::time::Duration::from_secs(10).saturating_sub(last_device_check.elapsed());
+                if let Some(deadline) = art_retry_at {
+                    wait = wait.min(deadline.saturating_duration_since(now));
+                }
+                wait = wait.min(std::time::Duration::from_secs(5).saturating_sub(last_processed_media.elapsed()));
+                std::thread::park_timeout(wait.max(std::time::Duration::from_millis(50)));
             }
         }
     });
+    if let Ok(thread) = media_thread {
+        let _ = crate::state::MEDIA_WORKER.set(thread.thread().clone());
+    }
 
     let handle_brightness = app_handle.clone();
     std::thread::spawn(move || {
@@ -1182,7 +1341,7 @@ pub fn setup_system_worker(app_handle: AppHandle) -> Sender<SystemCommand> {
 
     let tx_clone = tx.clone();
     let handle_visibility = app_handle.clone();
-    std::thread::spawn(move || {
+    let visibility_thread = std::thread::spawn(move || {
         use windows::Win32::UI::WindowsAndMessaging::{GetForegroundWindow, GetWindowRect, IsZoomed, IsIconic, GetWindowLongW, GWL_STYLE, WS_MAXIMIZE, WS_CAPTION, GetClientRect};
         use windows::Win32::Graphics::Gdi::ClientToScreen;
         use windows::Win32::Foundation::{RECT, POINT};
@@ -1203,7 +1362,7 @@ pub fn setup_system_worker(app_handle: AppHandle) -> Sender<SystemCommand> {
         
         loop {
             if SHUTTING_DOWN.load(Ordering::Relaxed) {
-                std::thread::sleep(std::time::Duration::from_millis(150));
+                std::thread::park_timeout(std::time::Duration::from_millis(500));
                 continue;
             }
             unsafe {
@@ -1486,9 +1645,11 @@ pub fn setup_system_worker(app_handle: AppHandle) -> Sender<SystemCommand> {
                 // Update full-screen visibility (hides TopBar/Corners)
                 if current_is_fs && last_visible {
                     let _ = tx_clone.send(SystemCommand::ToggleVisibility(false));
+                    wake_media_worker();
                     last_visible = false;
                 } else if !current_is_fs && !last_visible {
                     let _ = tx_clone.send(SystemCommand::ToggleVisibility(true));
+                    wake_media_worker();
                     last_visible = true;
                 }
 
@@ -1527,9 +1688,11 @@ pub fn setup_system_worker(app_handle: AppHandle) -> Sender<SystemCommand> {
                     apply_capture_ui_state(&handle_visibility, active);
                 }
             }
-            std::thread::sleep(std::time::Duration::from_millis(150));
+            // Safety net only: window/focus events unpark this thread immediately.
+            std::thread::park_timeout(std::time::Duration::from_millis(1500));
         }
     });
+    let _ = crate::state::VISIBILITY_WORKER.set(visibility_thread.thread().clone());
 
     tx
 }
@@ -1998,7 +2161,12 @@ fn volume_mixer_physical_rect_for(app: &AppHandle) -> Option<(i32, i32, i32, i32
 /// The hook only fires on movement, so a cursor that stops just outside the mixer would leave it
 /// open. This closes the card once the cursor is off it.
 fn setup_volume_mixer_watchdog(app_handle: AppHandle) {
-    std::thread::spawn(move || loop {
+    let thread = std::thread::spawn(move || loop {
+        // Nothing to watch while the mixer is closed: park until it opens.
+        let Some((rx, ry, rw, rh)) = volume_mixer_physical_rect_for(&app_handle) else {
+            std::thread::park();
+            continue;
+        };
         std::thread::sleep(Duration::from_millis(200));
         if SHUTTING_DOWN.load(Ordering::Relaxed) {
             continue;
@@ -2016,9 +2184,6 @@ fn setup_volume_mixer_watchdog(app_handle: AppHandle) {
                 worker.unpark();
             }
         }
-        let Some((rx, ry, rw, rh)) = volume_mixer_physical_rect_for(&app_handle) else {
-            continue;
-        };
         let inside = pt.x >= rx && pt.x <= rx + rw && pt.y >= ry && pt.y <= ry + rh;
         if inside {
             continue;
@@ -2037,6 +2202,7 @@ fn setup_volume_mixer_watchdog(app_handle: AppHandle) {
             let _ = app_handle.emit("volume-edge-hover", false);
         }
     });
+    let _ = crate::state::MIXER_WATCHDOG.set(thread.thread().clone());
 }
 
 pub fn setup_mouse_hook(app_handle: AppHandle) {
@@ -3633,8 +3799,10 @@ unsafe extern "system" fn display_monitor_proc(
 }
 
 pub fn start_window_style_guard(app: AppHandle) {
-    std::thread::spawn(move || loop {
-        std::thread::sleep(std::time::Duration::from_millis(300));
+    let thread = std::thread::spawn(move || loop {
+        // Window/focus events wake this immediately; the timeout is only a
+        // corrective fallback for styles changed outside the app.
+        std::thread::park_timeout(std::time::Duration::from_millis(5000));
         for (label, win) in app.webview_windows() {
             let is_notch = is_notch_label(&label);
             let is_dock = is_dock_label(&label);
@@ -3680,6 +3848,7 @@ pub fn start_window_style_guard(app: AppHandle) {
             }
         }
     });
+    let _ = crate::state::STYLE_GUARD_WORKER.set(thread.thread().clone());
 }
 
 static WEBVIEWS_WATCHED_AT: OnceLock<Instant> = OnceLock::new();

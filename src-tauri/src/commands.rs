@@ -32,6 +32,7 @@ pub fn set_window_keyboard_focus(window: Window, enabled: bool) {
         }
     }
     let Ok(hwnd) = window.hwnd() else { return };
+    crate::services::wake_style_guard();
     unsafe {
         let ex = GetWindowLongPtrW(hwnd, GWL_EXSTYLE) as usize;
         let noactivate = WS_EX_NOACTIVATE.0 as usize;
@@ -2143,19 +2144,20 @@ pub fn select_media_session(id: Option<String>) {
         *selected = id.filter(|s| !s.is_empty());
     }
     crate::services::MEDIA_REFRESH.store(true, Ordering::Relaxed);
+    crate::services::wake_media_worker();
 }
 
 #[tauri::command]
-pub fn media_play_pause() { if let Some(sender) = COMMAND_SENDER.get() { let _ = sender.send(crate::types::SystemCommand::MediaPlayPause); } crate::services::MEDIA_REFRESH.store(true, Ordering::Relaxed); }
+pub fn media_play_pause() { crate::services::send_system_command(crate::types::SystemCommand::MediaPlayPause); crate::services::MEDIA_REFRESH.store(true, Ordering::Relaxed); }
 
 #[tauri::command]
-pub fn media_next() { if let Some(sender) = COMMAND_SENDER.get() { let _ = sender.send(crate::types::SystemCommand::MediaNext); } crate::services::MEDIA_REFRESH.store(true, Ordering::Relaxed); }
+pub fn media_next() { crate::services::send_system_command(crate::types::SystemCommand::MediaNext); crate::services::MEDIA_REFRESH.store(true, Ordering::Relaxed); }
 
 #[tauri::command]
-pub fn media_previous() { if let Some(sender) = COMMAND_SENDER.get() { let _ = sender.send(crate::types::SystemCommand::MediaPrevious); } crate::services::MEDIA_REFRESH.store(true, Ordering::Relaxed); }
+pub fn media_previous() { crate::services::send_system_command(crate::types::SystemCommand::MediaPrevious); crate::services::MEDIA_REFRESH.store(true, Ordering::Relaxed); }
 
 #[tauri::command]
-pub fn media_seek(position_ms: f64) { if let Some(sender) = COMMAND_SENDER.get() { let _ = sender.send(crate::types::SystemCommand::MediaSeek(position_ms as i64)); } crate::services::MEDIA_REFRESH.store(true, Ordering::Relaxed); }
+pub fn media_seek(position_ms: f64) { crate::services::send_system_command(crate::types::SystemCommand::MediaSeek(position_ms as i64)); crate::services::MEDIA_REFRESH.store(true, Ordering::Relaxed); }
 
 #[derive(serde::Serialize)]
 pub struct AppMediaSession {
@@ -2301,7 +2303,7 @@ pub fn open_media_source_app() {
 }
 
 #[tauri::command]
-pub fn set_volume(volume: f32) { if let Some(sender) = COMMAND_SENDER.get() { let _ = sender.send(crate::types::SystemCommand::SetVolume(volume)); } }
+pub fn set_volume(volume: f32) { crate::services::send_system_command(crate::types::SystemCommand::SetVolume(volume)); }
 
 /// Full path of a process, None if we can't open it.
 unsafe fn process_image_path(pid: u32) -> Option<String> {
@@ -2580,6 +2582,7 @@ pub fn set_volume_mixer_rect(x: f64, y: f64, width: f64, height: f64) {
     if let Ok(mut rect) = VOLUME_MIXER_RECT.lock() {
         *rect = Some((x, y, width, height));
     }
+    crate::services::wake_mixer_watchdog();
 }
 
 #[tauri::command]
@@ -2880,6 +2883,7 @@ pub fn set_notch_visible(visible: bool) {
     // Re-read media the moment the notch comes back, so the pill is not stale.
     if visible {
         crate::services::MEDIA_REFRESH.store(true, std::sync::atomic::Ordering::Relaxed);
+        crate::services::wake_media_worker();
     }
 }
 

@@ -5,6 +5,12 @@ use crate::types::{SystemCommand, IntRect, AppInfo};
 use tauri::{AppHandle, PhysicalPosition, PhysicalSize};
 
 pub static COMMAND_SENDER: OnceLock<Sender<SystemCommand>> = OnceLock::new();
+// Background loops parked on condvars; event sources unpark them instead of the
+// loops waking on a timer.
+pub static VISIBILITY_WORKER: OnceLock<std::thread::Thread> = OnceLock::new();
+pub static MEDIA_WORKER: OnceLock<std::thread::Thread> = OnceLock::new();
+pub static STYLE_GUARD_WORKER: OnceLock<std::thread::Thread> = OnceLock::new();
+pub static MIXER_WATCHDOG: OnceLock<std::thread::Thread> = OnceLock::new();
 pub static NATIVE_TASKBAR_HIDDEN: AtomicBool = AtomicBool::new(false);
 /// Set first on every quit/restart path. Window calls while the webviews are torn down panic
 /// ("already mutably borrowed"), so hooks and loops stand down once it's set.
@@ -145,6 +151,8 @@ pub static CURRENT_BRIGHTNESS: AtomicU32 = AtomicU32::new(50);
 pub static CURRENT_VOLUME: AtomicU32 = AtomicU32::new(50);
 pub static LAST_BRIGHTNESS_CHANGE: AtomicI64 = AtomicI64::new(0);
 pub static ANY_MEDIA_PLAYING: AtomicBool = AtomicBool::new(false);
+/// An audio endpoint was added/removed or the default device changed.
+pub static DEVICE_DIRTY: AtomicBool = AtomicBool::new(false);
 // Mirrors "notch is hidden or a fullscreen app is in front" so background loops
 // can stand down. Driven by the frontend via set_notch_visible.
 pub static NOTCH_VISIBLE: AtomicBool = AtomicBool::new(true);
