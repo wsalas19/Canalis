@@ -1,3 +1,5 @@
+@import "./typography.css";
+
 :root {
   --cw-bg: var(--nectar-bg, rgba(0, 0, 0, 0.8));
   --cw-bar: rgba(255, 255, 255, 0.02);
@@ -45,7 +47,7 @@ button {
   background: var(--cw-bg);
   backdrop-filter: blur(25px) saturate(140%);
   -webkit-backdrop-filter: blur(25px) saturate(140%);
-  border-radius: 12px;
+  border-radius: 8px;
   border: 1px solid var(--cw-line);
   box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5);
   overflow: hidden;
@@ -66,7 +68,7 @@ button {
 }
 
 .cw-title-text {
-  font-size: 12px;
+  font-size: var(--text-body-sm);
   font-weight: 600;
   letter-spacing: 0.02em;
   color: var(--cw-title);
@@ -93,7 +95,7 @@ button {
 
 .cw-label {
   padding: 4px 8px 8px;
-  font-size: 10px;
+  font-size: var(--text-caption);
   font-weight: 700;
   letter-spacing: 0.06em;
   text-transform: uppercase;
@@ -118,7 +120,7 @@ button {
   border-radius: 8px;
   background: transparent;
   color: var(--cw-text);
-  font-size: 12px;
+  font-size: var(--text-body-sm);
   text-align: left;
   cursor: pointer;
 }
@@ -152,7 +154,7 @@ button {
 
 .cw-muted {
   padding: 6px 8px;
-  font-size: 11px;
+  font-size: var(--text-caption-strong);
   color: var(--cw-muted);
 }
 
@@ -174,7 +176,7 @@ button {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  font-size: 11px;
+  font-size: var(--text-caption-strong);
   color: var(--cw-muted);
 }
 
@@ -188,7 +190,7 @@ button {
   border-radius: 6px;
   background: rgba(255, 255, 255, 0.08);
   color: var(--cw-text);
-  font-size: 11px;
+  font-size: var(--text-caption-strong);
   cursor: pointer;
 }
 
@@ -208,7 +210,7 @@ button {
 }
 
 .cw-error {
-  font-size: 10.5px;
+  font-size: var(--text-caption);
   color: #ff6b6b;
 }
 
@@ -242,7 +244,7 @@ button {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-size: 18px;
+  font-size: var(--text-heading);
   font-weight: 700;
   letter-spacing: -0.2px;
 }
@@ -268,7 +270,7 @@ button {
   border-radius: 6px;
   background: transparent;
   color: var(--cw-text);
-  font-size: 11.5px;
+  font-size: var(--text-caption-strong);
   font-weight: 500;
   opacity: 0.6;
   cursor: pointer;
@@ -312,7 +314,7 @@ button {
 .cw-nav .cw-today {
   padding: 4px 10px;
   margin-right: 4px;
-  font-size: 11.5px;
+  font-size: var(--text-caption-strong);
   font-weight: 600;
   opacity: 1;
   background: rgba(255, 255, 255, 0.12);
@@ -330,14 +332,14 @@ button {
 }
 
 .cw-selected-date {
-  font-size: 13px;
+  font-size: var(--text-body);
   font-weight: 700;
   color: var(--cw-text);
 }
 
 .cw-selected-count {
   flex: 1;
-  font-size: 12px;
+  font-size: var(--text-body-sm);
   color: var(--cw-text);
   opacity: 0.7;
 }
@@ -348,14 +350,14 @@ button {
   border-radius: 8px;
   background: var(--cw-text);
   color: var(--cw-inverse);
-  font-size: 12px;
+  font-size: var(--text-body-sm);
   font-weight: 700;
   cursor: pointer;
 }
 
 .cw-primary.small {
   padding: 4px 11px;
-  font-size: 11.5px;
+  font-size: var(--text-caption-strong);
 }
 
 .cw-primary:hover {
@@ -387,7 +389,7 @@ button {
   grid-template-columns: repeat(7, 1fr);
   padding: 6px 0;
   text-align: center;
-  font-size: 10px;
+  font-size: var(--text-caption);
   font-weight: 700;
   letter-spacing: 0.06em;
   text-transform: uppercase;
@@ -482,7 +484,7 @@ button {
   align-items: center;
   justify-content: center;
   border-radius: 999px;
-  font-size: 11.5px;
+  font-size: var(--text-caption-strong);
   font-weight: 600;
   color: var(--cw-text);
 }
@@ -513,7 +515,7 @@ button {
   border-left: 3px solid var(--c);
   border-radius: 4px;
   background: color-mix(in srgb, var(--c) 24%, transparent);
-  font-size: 11px;
+  font-size: var(--text-caption-strong);
   line-height: 1.25;
 }
 
@@ -538,7 +540,7 @@ button {
 }
 
 .cw-chip.stacked i {
-  font-size: 9.5px;
+  font-size: var(--text-micro);
 }
 
 .cw-chip.stacked span {
@@ -547,7 +549,7 @@ button {
 
 .cw-more {
   padding: 0 4px;
-  font-size: 10px;
+  font-size: var(--text-caption);
   color: var(--cw-muted);
 }
 
@@ -609,7 +611,7 @@ button {
 
 .cw-week-head em {
   font-style: normal;
-  font-size: 10px;
+  font-size: var(--text-caption);
   font-weight: 700;
   letter-spacing: 0.06em;
   text-transform: uppercase;
@@ -651,14 +653,14 @@ button {
   flex-shrink: 0;
   display: flex;
   flex-direction: column;
-  font-size: 11px;
+  font-size: var(--text-caption-strong);
   line-height: 1.35;
   font-variant-numeric: tabular-nums;
   opacity: 0.85;
 }
 
 .cw-day-time b {
-  font-size: 12px;
+  font-size: var(--text-body-sm);
   font-weight: 700;
 }
 
@@ -676,7 +678,7 @@ button {
   display: flex;
   align-items: center;
   gap: 7px;
-  font-size: 14px;
+  font-size: var(--text-body);
   font-weight: 700;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -690,13 +692,13 @@ button {
   background: #ff5a5f;
   color: #fff;
   font-style: normal;
-  font-size: 9px;
+  font-size: var(--text-micro);
   font-weight: 800;
   text-transform: uppercase;
 }
 
 .cw-day-meta {
-  font-size: 11px;
+  font-size: var(--text-caption-strong);
   opacity: 0.55;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -708,7 +710,7 @@ button {
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 13px;
+  font-size: var(--text-body);
   color: var(--cw-muted);
 }
 
@@ -725,7 +727,7 @@ button {
   border: none;
   background: transparent;
   color: var(--cw-text);
-  font-size: 11px;
+  font-size: var(--text-caption-strong);
   font-weight: 800;
   letter-spacing: 0.05em;
   text-transform: uppercase;
@@ -749,13 +751,13 @@ button {
 }
 
 .cw-empty-title {
-  font-size: 17px;
+  font-size: var(--text-title);
   font-weight: 700;
 }
 
 .cw-empty-text {
   max-width: 340px;
-  font-size: 12.5px;
+  font-size: var(--text-body-sm);
   line-height: 1.5;
   color: var(--cw-muted);
 }
@@ -765,7 +767,7 @@ button {
   align-items: center;
   gap: 4px;
   padding: 0 4px;
-  font-size: 10px;
+  font-size: var(--text-caption);
   color: var(--cw-muted);
 }
 
@@ -790,7 +792,7 @@ button {
 
 .cw-hover-title {
   margin-bottom: 6px;
-  font-size: 12px;
+  font-size: var(--text-body-sm);
   font-weight: 700;
   color: var(--cw-text);
 }
@@ -806,7 +808,7 @@ button {
 }
 
 .cw-hover-name {
-  font-size: 12px;
+  font-size: var(--text-body-sm);
   font-weight: 600;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -814,7 +816,7 @@ button {
 }
 
 .cw-hover-meta {
-  font-size: 10.5px;
+  font-size: var(--text-caption);
   color: var(--cw-muted);
   overflow: hidden;
   text-overflow: ellipsis;
@@ -823,6 +825,6 @@ button {
 
 .cw-hover-more {
   margin-top: 6px;
-  font-size: 10.5px;
+  font-size: var(--text-caption);
   color: var(--cw-muted);
 }

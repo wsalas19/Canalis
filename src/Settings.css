@@ -1,3 +1,5 @@
+@import "./typography.css";
+
 :root {
   /* Windowed surfaces (settings/calendar) share the notch + dock background so
      the whole app reads as one theme instead of a navy-gray panel. */
@@ -46,7 +48,7 @@ body {
   background: var(--bg-color);
   backdrop-filter: blur(25px) saturate(140%);
   -webkit-backdrop-filter: blur(25px) saturate(140%);
-  border-radius: 12px;
+  border-radius: 8px;
   overflow: hidden;
   border: 1px solid var(--window-line);
   box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5);
@@ -67,7 +69,7 @@ body {
 }
 
 .title-text {
-  font-size: 12px;
+  font-size: var(--text-body-sm);
   font-weight: 600;
   letter-spacing: 0.02em;
   color: var(--window-title);
@@ -112,7 +114,7 @@ body {
   background: transparent;
   border: none;
   color: var(--text-color);
-  font-size: 13px;
+  font-size: var(--text-body);
   font-weight: 500;
   cursor: pointer;
   text-align: left;
@@ -231,7 +233,7 @@ body {
 }
 
 .setting-group-label {
-  font-size: 11px;
+  font-size: var(--text-caption-strong);
   font-weight: 600;
   color: var(--nectar-text-muted, rgba(255, 255, 255, 0.4));
   text-transform: uppercase;
@@ -249,9 +251,14 @@ body {
 
 .setting-group {
   background: var(--group-bg);
-  border-radius: 12px;
+  border-radius: 8px;
   overflow: hidden;
   border: 1px solid var(--nectar-border, rgba(255, 255, 255, 0.05));
+}
+
+/* Breathing room under the last row (widget pills, order lists, reset buttons). */
+.setting-section .setting-group {
+  padding-bottom: 6px;
 }
 
 .setting-group--menu {
@@ -303,13 +310,13 @@ body {
 }
 
 .setting-label {
-  font-size: 14px;
+  font-size: var(--text-body);
   font-weight: 500;
   color: var(--nectar-text, rgba(255, 255, 255, 0.95));
 }
 
 .setting-desc {
-  font-size: 11px;
+  font-size: var(--text-caption-strong);
   color: var(--text-muted);
   opacity: 0.8;
 }
@@ -386,7 +393,7 @@ input:checked + .slider:before {
 }
 
 .unit-toggle-minimal span {
-  font-size: 10px;
+  font-size: var(--text-caption);
   font-weight: 700;
   width: 18px;
   height: 18px;
@@ -407,7 +414,7 @@ input:checked + .slider:before {
 .unit-toggle-minimal.wide span {
   width: auto;
   padding: 0 10px;
-  font-size: 11px;
+  font-size: var(--text-caption-strong);
 }
 
 .searching-spinner {
@@ -442,7 +449,7 @@ input:checked + .slider:before {
   width: 100%;
   background: transparent;
   border: none;
-  font-size: 12px;
+  font-size: var(--text-body-sm);
   color: var(--nectar-text, #fff);
   padding: 4px 20px 4px 0;
   outline: none;
@@ -507,13 +514,13 @@ input:checked + .slider:before {
 }
 
 .city-dropdown-name {
-  font-size: 12px;
+  font-size: var(--text-body-sm);
   color: var(--nectar-text, #fff);
   font-weight: 500;
 }
 
 .city-dropdown-country {
-  font-size: 10px;
+  font-size: var(--text-caption);
   color: var(--nectar-text-muted, rgba(255, 255, 255, 0.35));
 }
 
@@ -531,7 +538,7 @@ input:checked + .slider:before {
   border: 1px solid var(--nectar-border, rgba(255, 255, 255, 0.07));
   color: var(--nectar-text, white);
   font: inherit;
-  font-size: 11px;
+  font-size: var(--text-caption-strong);
   font-weight: 500;
   border-radius: 7px;
   padding: 5px 7px 5px 10px;
@@ -607,7 +614,7 @@ input:checked + .slider:before {
   border: none;
   color: var(--nectar-text, white);
   font: inherit;
-  font-size: 11px;
+  font-size: var(--text-caption-strong);
   padding: 7px 9px;
   border-radius: 6px;
   cursor: pointer;
@@ -660,7 +667,7 @@ input:checked + .slider:before {
 
 .processes-empty {
   padding: 16px 14px;
-  font-size: 12px;
+  font-size: var(--text-body-sm);
   color: var(--text-muted);
   text-align: center;
 }
@@ -710,7 +717,7 @@ input:checked + .slider:before {
 }
 
 .process-name {
-  font-size: 13px;
+  font-size: var(--text-body);
   font-weight: 500;
   color: var(--nectar-text, rgba(255, 255, 255, 0.95));
   overflow: hidden;
@@ -719,7 +726,7 @@ input:checked + .slider:before {
 }
 
 .process-desc {
-  font-size: 11px;
+  font-size: var(--text-caption-strong);
   color: var(--text-muted);
   opacity: 0.8;
 }
@@ -808,7 +815,7 @@ input:checked + .slider:before {
   background: transparent;
   border: none;
   color: var(--nectar-text, white);
-  font-size: 11px;
+  font-size: var(--text-caption-strong);
   font-weight: 700;
   width: 20px;
   height: 20px;
@@ -835,7 +842,7 @@ input:checked + .slider:before {
 }
 
 .scale-display-value {
-  font-size: 11px;
+  font-size: var(--text-caption-strong);
   font-weight: 600;
   min-width: 32px;
   text-align: center;
@@ -861,7 +868,7 @@ input:checked + .slider:before {
 }
 
 .color-picker-label {
-  font-size: 11px;
+  font-size: var(--text-caption-strong);
   font-weight: 600;
   color: var(--text-muted);
 }
@@ -882,7 +889,7 @@ input:checked + .slider:before {
   border: 1px solid var(--window-line);
   border-radius: 6px;
   padding: 5px 8px;
-  font-size: 12px;
+  font-size: var(--text-body-sm);
   color: var(--text-color);
   outline: none;
   transition: border-color 0.15s ease, background 0.15s ease;
@@ -962,7 +969,7 @@ input:checked + .slider:before {
 }
 
 .about-title {
-  font-size: 24px;
+  font-size: var(--text-title-lg);
   font-weight: 700;
   color: var(--text-color);
   margin: 0 0 2px 0;
@@ -970,7 +977,7 @@ input:checked + .slider:before {
 }
 
 .about-version {
-  font-size: 12px;
+  font-size: var(--text-body-sm);
   color: var(--text-muted);
   margin: 0;
   opacity: 0.85;
@@ -981,7 +988,7 @@ input:checked + .slider:before {
   border: none;
   border-radius: 999px;
   padding: 5px 14px;
-  font-size: 11.5px;
+  font-size: var(--text-caption-strong);
   font-weight: 600;
   font-family: inherit;
   cursor: pointer;
@@ -1025,7 +1032,7 @@ input:checked + .slider:before {
 }
 
 .about-footer p {
-  font-size: 10px;
+  font-size: var(--text-caption);
   color: var(--text-muted);
   margin: 0;
 }
@@ -1059,7 +1066,7 @@ input:checked + .slider:before {
 }
 
 .widget-config-side {
-  font-size: 10px;
+  font-size: var(--text-caption);
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.5px;
@@ -1093,7 +1100,7 @@ input:checked + .slider:before {
 }
 
 .widget-config-empty {
-  font-size: 11px;
+  font-size: var(--text-caption-strong);
   color: var(--nectar-text-muted, rgba(255, 255, 255, 0.15));
   font-style: italic;
 }
@@ -1116,7 +1123,7 @@ input:checked + .slider:before {
   gap: 5px;
   padding: 4px 8px;
   border-radius: 6px;
-  font-size: 11px;
+  font-size: var(--text-caption-strong);
   font-weight: 500;
   color: var(--nectar-text, rgba(255, 255, 255, 0.7));
   white-space: nowrap;
@@ -1212,7 +1219,7 @@ input:checked + .slider:before {
   background: var(--nectar-group-bg, rgba(255, 255, 255, 0.1));
   border: 1px solid var(--nectar-border, rgba(255, 255, 255, 0.05));
   color: var(--nectar-text, white);
-  font-size: 11px;
+  font-size: var(--text-caption-strong);
   border-radius: 6px;
   padding: 4px 10px;
   cursor: pointer;
@@ -1250,7 +1257,7 @@ input:checked + .slider:before {
   border: 1px solid var(--nectar-border, rgba(255, 255, 255, 0.08));
   border-radius: 6px;
   color: var(--nectar-text, #fff);
-  font-size: 12px;
+  font-size: var(--text-body-sm);
   padding: 6px 8px;
   outline: none;
 }
@@ -1267,14 +1274,14 @@ input:checked + .slider:before {
 }
 
 .caldav-hint {
-  font-size: 10px;
+  font-size: var(--text-caption);
   line-height: 1.4;
   color: var(--nectar-text-muted, rgba(255, 255, 255, 0.35));
 }
 
 .caldav-error {
   margin: 0 14px 10px 54px;
-  font-size: 11px;
+  font-size: var(--text-caption-strong);
   color: #ff6b6b;
 }
 
@@ -1292,7 +1299,7 @@ input:checked + .slider:before {
   background: transparent;
   border: none;
   color: var(--nectar-text-muted, rgba(255, 255, 255, 0.55));
-  font-size: 12px;
+  font-size: var(--text-body-sm);
   padding: 2px 4px 2px 0;
   cursor: pointer;
 }
@@ -1303,7 +1310,7 @@ input:checked + .slider:before {
 
 .caldav-intro {
   margin: 10px 14px 4px 14px;
-  font-size: 11px;
+  font-size: var(--text-caption-strong);
   line-height: 1.45;
   color: var(--nectar-text-muted, rgba(255, 255, 255, 0.4));
 }
@@ -1313,7 +1320,7 @@ input:checked + .slider:before {
 }
 
 .caldav-detect {
-  font-size: 11px;
+  font-size: var(--text-caption-strong);
 }
 
 .caldav-detect.good {
@@ -1328,7 +1335,7 @@ input:checked + .slider:before {
   background: transparent;
   border: none;
   padding: 0;
-  font-size: 11px;
+  font-size: var(--text-caption-strong);
   color: var(--nectar-text-muted, rgba(255, 255, 255, 0.5));
   text-decoration: underline;
   cursor: pointer;
@@ -1340,7 +1347,7 @@ input:checked + .slider:before {
 
 .caldav-guide {
   margin: 2px 14px 12px 54px;
-  font-size: 11px;
+  font-size: var(--text-caption-strong);
   line-height: 1.45;
   color: var(--nectar-text-muted, rgba(255, 255, 255, 0.55));
 }
@@ -1357,7 +1364,7 @@ input:checked + .slider:before {
   border: 1px solid var(--nectar-border, rgba(255, 255, 255, 0.08));
   border-radius: 999px;
   color: var(--nectar-text-muted, rgba(255, 255, 255, 0.6));
-  font-size: 11px;
+  font-size: var(--text-caption-strong);
   padding: 2px 10px;
   cursor: pointer;
 }
@@ -1381,7 +1388,7 @@ input:checked + .slider:before {
 
 .caldav-guide p {
   margin: 0;
-  font-size: 10.5px;
+  font-size: var(--text-caption);
   opacity: 0.8;
 }
 
@@ -1404,7 +1411,7 @@ input:checked + .slider:before {
     padding: 2px 6px;
     border-radius: 999px;
     background: rgba(255, 255, 255, 0.08);
-    font-size: 11px;
+    font-size: var(--text-caption-strong);
 }
 
 .panel-order-arrow {
@@ -1413,7 +1420,7 @@ input:checked + .slider:before {
     color: inherit;
     cursor: pointer;
     padding: 0 2px;
-    font-size: 13px;
+    font-size: var(--text-body);
     line-height: 1;
 }
 
@@ -1432,7 +1439,7 @@ input:checked + .slider:before {
     border-radius: 8px;
     background: transparent;
     color: var(--nectar-text-muted, rgba(255, 255, 255, 0.6));
-    font-size: 11px;
+    font-size: var(--text-caption-strong);
     font-weight: 500;
     cursor: pointer;
     transition: background 0.15s, color 0.15s, border-color 0.15s;
@@ -1460,8 +1467,8 @@ input:checked + .slider:before {
     padding: 11px 14px;
     background: var(--group-bg);
     border: 1px solid var(--nectar-border, rgba(255, 255, 255, 0.05));
-    border-radius: 12px;
-    font-size: 12.5px;
+    border-radius: 8px;
+    font-size: var(--text-body-sm);
     font-weight: 600;
     letter-spacing: 0.2px;
     text-transform: none;
@@ -1515,7 +1522,7 @@ input:checked + .slider:before {
 
 .setting-item.stacked > :not(.setting-icon-bg):not(.setting-info) {
     flex: 1 1 100%;
-    margin: 8px 0 0 40px;
+    margin: 8px 0 6px 40px;
 }
 
 .setting-item.stacked .panel-order-row {

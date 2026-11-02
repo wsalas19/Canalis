@@ -1,0 +1,22 @@
+/* Nectar type scale.
+ *
+ * Roles, not ad-hoc pixels. The ramp is close to the Windows/macOS small-text
+ * steps (caption -> body -> title) with 9-10px micro steps for the notch, which
+ * is denser than a normal window. Each step is roughly 1.1-1.25x the previous,
+ * so nested text keeps a readable hierarchy on every surface.
+ *
+ * Imported by every surface stylesheet so the notch, dock, settings, calendar
+ * and overlays all read from the same ladder.
+ */
+:root {
+  --text-micro: 9px;          /* dots, superscripts, the smallest meta */
+  --text-caption: 10px;       /* timestamps, overlines, dense meta */
+  --text-caption-strong: 11px;/* secondary labels, hints, descriptions */
+  --text-body-sm: 12px;       /* artist lines, tooltips, small controls */
+  --text-body: 14px;          /* primary labels, menu items, app names */
+  --text-title: 16px;         /* media titles, list titles, window headings */
+  --text-heading: 20px;       /* section-level headings */
+  --text-title-lg: 24px;      /* about / page titles */
+  --text-display: 28px;       /* timer numerals */
+  --text-display-lg: 32px;    /* large timer numerals */
+}

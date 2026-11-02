@@ -1888,7 +1888,7 @@ function AppNotch() {
       <div style={{ zoom: scale, width: '100%', display: 'flex', justifyContent: 'center' }}>
         <motion.div
           ref={nectarRef}
-          className={`nectar ${isHovered ? 'expanded' : ''} ${isImpacted ? 'is-impacted' : ''}`}
+          className={`nectar ${isHovered ? 'expanded' : ''} ${isImpacted ? 'is-impacted' : ''} ${isMusicMode && mediaSessions.length > 1 ? 'has-media-sessions' : ''}`}
           onMouseEnter={() => setIsNotchHovered(true)}
         onMouseLeave={() => setIsNotchHovered(false)}
         onWheel={handleWheel}

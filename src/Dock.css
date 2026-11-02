@@ -1,3 +1,5 @@
+@import "./typography.css";
+
 html,
 body {
   margin: 0;
@@ -34,7 +36,7 @@ body {
   color: white;
   padding: 4px 10px;
   border-radius: 6px;
-  font-size: 12px;
+  font-size: var(--text-body-sm);
   font-family: var(--nectar-font, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif);
   pointer-events: none;
   opacity: 0;
@@ -66,7 +68,7 @@ body {
   color: white;
   padding: 5px 10px;
   border-radius: 6px;
-  font-size: 11px;
+  font-size: var(--text-caption-strong);
   font-weight: 500;
   font-family: var(--nectar-font, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif);
   white-space: nowrap;
@@ -160,13 +162,13 @@ body {
 }
 
 .preview-media-title {
-  font-size: 12px;
+  font-size: var(--text-body-sm);
   font-weight: 600;
   color: rgba(255, 255, 255, 0.95);
 }
 
 .preview-media-artist {
-  font-size: 11px;
+  font-size: var(--text-caption-strong);
   color: rgba(255, 255, 255, 0.55);
 }
 
@@ -285,7 +287,7 @@ body {
 
 .preview-label {
   color: rgba(255, 255, 255, 0.9);
-  font-size: 12px;
+  font-size: var(--text-body-sm);
   font-weight: 500;
   white-space: nowrap;
   text-overflow: ellipsis;
@@ -454,7 +456,7 @@ body {
 }
 
 .dock-icon-only .fallback-icon {
-  font-size: 16px;
+  font-size: var(--text-title);
 }
 
 /* Active application indicator */
@@ -507,7 +509,7 @@ body {
 }
 
 .fallback-icon {
-  font-size: 16px;
+  font-size: var(--text-title);
   font-weight: 600;
   color: rgba(255, 255, 255, 0.7);
   text-transform: uppercase;
@@ -533,7 +535,7 @@ body {
 .menu-item {
   padding: 8px 12px;
   color: var(--nectar-text, white);
-  font-size: 13px;
+  font-size: var(--text-body);
   border-radius: 6px;
   cursor: pointer;
   font-weight: 500;
@@ -562,7 +564,7 @@ body {
 }
 
 .submenu-arrow {
-  font-size: 8px;
+  font-size: var(--text-micro);
   opacity: 0.5;
   margin-left: 10px;
 }
@@ -663,7 +665,7 @@ body {
   border: none;
   outline: none;
   color: var(--nectar-text, white);
-  font-size: 14px;
+  font-size: var(--text-body);
   font-weight: 400;
   font-family: inherit;
   letter-spacing: -0.01em;
@@ -705,7 +707,7 @@ body {
 
 .popup-section-label {
   padding: 10px 10px 4px;
-  font-size: 11px;
+  font-size: var(--text-caption-strong);
   font-weight: 600;
   letter-spacing: 0.06em;
   text-transform: uppercase;
@@ -777,14 +779,14 @@ body {
 }
 
 .popup-app-initial {
-  font-size: 13px;
+  font-size: var(--text-body);
   font-weight: 600;
   color: var(--nectar-text-muted, rgba(255, 255, 255, 0.4));
 }
 
 .popup-app-name {
   flex: 1;
-  font-size: 14px;
+  font-size: var(--text-body);
   font-weight: 500;
   color: var(--nectar-text, rgba(255, 255, 255, 0.9));
   white-space: nowrap;
@@ -800,7 +802,7 @@ body {
   align-items: center;
   justify-content: center;
   border-radius: 7px;
-  font-size: 15px;
+  font-size: var(--text-title);
   font-weight: 500;
   color: var(--nectar-text-muted, rgba(255, 255, 255, 0.25));
   opacity: 0;
@@ -827,7 +829,7 @@ body {
   padding: 40px;
   text-align: center;
   color: var(--nectar-text-muted, rgba(255, 255, 255, 0.3));
-  font-size: 13px;
+  font-size: var(--text-body);
   font-weight: 500;
 }
 
@@ -927,7 +929,7 @@ body {
   color: #f87171;
   padding: 8px 16px;
   border-radius: 8px;
-  font-size: 12px;
+  font-size: var(--text-body-sm);
   font-weight: 500;
   font-family: inherit;
   z-index: 10001;

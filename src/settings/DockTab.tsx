@@ -363,7 +363,7 @@ export function DockTab({
                       draggable={false}
                     />
                   ) : (
-                    <span style={{ fontSize: "20px" }}>+</span>
+                    <span style={{ fontSize: "var(--text-heading)" }}>+</span>
                   )}
                 </div>
                 {startIcon !== "default" && (

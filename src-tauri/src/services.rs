@@ -63,6 +63,41 @@ pub fn send_system_command(command: SystemCommand) {
     wake_media_worker();
 }
 
+/// Let the app's CSS radius win over the OS one. DWM rounds borderless windows at
+/// ~8 px by default, which clips a 12 px pane and makes it disagree with the cards
+/// drawn inside it.
+pub fn disable_os_rounding(hwnd: windows::Win32::Foundation::HWND) {
+    use windows::Win32::Graphics::Dwm::{
+        DwmSetWindowAttribute, DWMWA_WINDOW_CORNER_PREFERENCE, DWMWCP_DONOTROUND,
+    };
+    let preference = DWMWCP_DONOTROUND;
+    unsafe {
+        let _ = DwmSetWindowAttribute(
+            hwnd,
+            DWMWA_WINDOW_CORNER_PREFERENCE,
+            &preference as *const _ as *const core::ffi::c_void,
+            std::mem::size_of_val(&preference) as u32,
+        );
+    }
+}
+
+/// Opt into the standard Windows 11 window rounding (8 px at 96 DPI, scaled by
+/// DPI). The CSS pane uses the same 8 px so the frame and its cards agree.
+pub fn set_os_rounding(hwnd: windows::Win32::Foundation::HWND) {
+    use windows::Win32::Graphics::Dwm::{
+        DwmSetWindowAttribute, DWMWA_WINDOW_CORNER_PREFERENCE, DWMWCP_ROUND,
+    };
+    let preference = DWMWCP_ROUND;
+    unsafe {
+        let _ = DwmSetWindowAttribute(
+            hwnd,
+            DWMWA_WINDOW_CORNER_PREFERENCE,
+            &preference as *const _ as *const core::ffi::c_void,
+            std::mem::size_of_val(&preference) as u32,
+        );
+    }
+}
+
 /// Whether a HUD overlay is enabled. When it's off, its keys and the native flyout stay with Windows.
 fn overlay_enabled(app: &AppHandle, key: &str) -> bool {
     crate::utils::get_setting_str(app, key).map(|v| v != "false").unwrap_or(true)
@@ -3472,6 +3507,7 @@ pub fn wire_window_events(app: &AppHandle, window: &tauri::WebviewWindow, kind: 
 
     if let Ok(hwnd) = window.hwnd() {
         crate::active_look::prevent_minimize(hwnd);
+        disable_os_rounding(hwnd);
     }
 
     let win_for_rect = window.clone();

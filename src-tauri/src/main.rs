@@ -352,6 +352,7 @@ fn main() {
             // take effect on a window that has never been shown. Show it once
             // to register it with the compositor, then hide immediately.
             if let Some(ov_win) = app.get_webview_window("overlay") {
+                if let Ok(hwnd) = ov_win.hwnd() { crate::services::disable_os_rounding(hwnd); }
                 let _ = ov_win.show();
                 let _ = ov_win.hide();
                 let overlay_handle = app.handle().clone();
@@ -404,10 +405,11 @@ fn main() {
             if let Some(settings_win) = app.get_webview_window("settings") {
                 #[cfg(target_os = "windows")]
                 {
-                    let _ = window_vibrancy::apply_acrylic(&settings_win, Some((10, 10, 15, 20)));
+                    let _ = window_vibrancy::apply_acrylic(&settings_win, Some((0, 0, 0, 20)));
                 }
                 if let Ok(hwnd) = settings_win.hwnd() {
                     crate::active_look::keep_active_look(hwnd);
+                    crate::services::set_os_rounding(hwnd);
                 }
                 let win_clone = settings_win.clone();
                 settings_win.on_window_event(move |event| {
@@ -420,10 +422,11 @@ fn main() {
             if let Some(calendar_win) = app.get_webview_window("calendar") {
                 #[cfg(target_os = "windows")]
                 {
-                    let _ = window_vibrancy::apply_acrylic(&calendar_win, Some((10, 10, 15, 20)));
+                    let _ = window_vibrancy::apply_acrylic(&calendar_win, Some((0, 0, 0, 20)));
                 }
                 if let Ok(hwnd) = calendar_win.hwnd() {
                     crate::active_look::keep_active_look(hwnd);
+                    crate::services::set_os_rounding(hwnd);
                 }
                 let win_clone = calendar_win.clone();
                 calendar_win.on_window_event(move |event| {

@@ -1,4 +1,5 @@
 @import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap");
+@import "./typography.css";
 
 /* Never start native image drags from the notch/player UI */
 img {
@@ -85,7 +86,7 @@ body,
 .update-splash-text {
     color: var(--nectar-text, rgba(255, 255, 255, 0.9));
     font-family: var(--nectar-font, "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif);
-    font-size: 14px;
+    font-size: var(--text-body);
     font-weight: 500;
     margin-bottom: 16px;
     text-align: center;
@@ -255,7 +256,7 @@ body,
 }
 
 .volume-notch-action-percent {
-  font-size: 10px;
+  font-size: var(--text-caption);
   font-weight: 700;
   font-family: var(--nectar-font, "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif);
   letter-spacing: -0.02em;
@@ -322,7 +323,7 @@ body,
 
 .volume-mixer-empty {
   color: var(--nectar-text-muted, rgba(255, 255, 255, 0.6));
-  font-size: 11px;
+  font-size: var(--text-caption-strong);
   font-weight: 500;
   font-family: var(--nectar-font, "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif);
   text-align: center;
@@ -397,7 +398,7 @@ body,
   border-radius: 5px;
   background: var(--nectar-border, rgba(255, 255, 255, 0.15));
   color: var(--nectar-text, white);
-  font-size: 9px;
+  font-size: var(--text-micro);
   font-weight: 700;
   font-family: var(--nectar-font, "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif);
   transition: opacity 0.16s ease;
@@ -417,7 +418,7 @@ body,
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 9px;
+  font-size: var(--text-micro);
   font-weight: 700;
   font-variant-numeric: tabular-nums;
   letter-spacing: -0.02em;
