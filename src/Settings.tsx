@@ -127,6 +127,8 @@ function SettingsApp() {
               toggleCorners={settings.toggleCorners}
               scale={settings.scale}
               handleScaleChange={settings.handleScaleChange}
+              fontFamily={settings.fontFamily}
+              handleFontFamilyChange={settings.handleFontFamilyChange}
             />
           )}
           {activeTab === "calendar-sync" && <CalendarSyncPage onBack={() => setActiveTab("notch")} />}
@@ -169,6 +171,8 @@ function SettingsApp() {
               toggleAmbience={settings.toggleAmbience}
               mediaCompactGlowEnabled={settings.mediaCompactGlowEnabled}
               toggleCompactGlow={settings.toggleCompactGlow}
+              artworkThemeEnabled={settings.mediaArtworkThemeEnabled}
+              toggleArtworkTheme={settings.toggleArtworkTheme}
               notchScrollVolume={settings.notchScrollVolume}
               toggleNotchScrollVolume={settings.toggleNotchScrollVolume}
               shelfPersist={settings.shelfPersist}

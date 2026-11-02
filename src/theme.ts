@@ -86,14 +86,39 @@ function hslToHex(h: number, s: number, l: number): string {
   return `#${toHex(r)}${toHex(g)}${toHex(b)}`;
 }
 
+export const DEFAULT_FONT_STACK =
+  '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif';
+
+// A typed family name becomes one quoted family in front of the default stack:
+// a name that is not installed (or a typo) then falls back to the normal UI font
+// instead of the browser default. Comma lists are accepted, and any entry with a
+// space is quoted so "Cascadia Code" is read as one family.
+export function fontStack(value: string | null | undefined): string {
+  const raw = (value ?? "").trim();
+  if (!raw) return DEFAULT_FONT_STACK;
+  const families = raw
+    .split(",")
+    .map((part) => part.trim())
+    .filter(Boolean)
+    .map((part) => (/\s/.test(part) && !/["']/.test(part) ? `"${part}"` : part))
+    .join(", ");
+  return `${families}, ${DEFAULT_FONT_STACK}`;
+}
+
 export async function applyTheme(
   mode: string,
   customColor: string,
   opacity?: number,
   saturation?: number,
-  brightness?: number
+  brightness?: number,
+  fontFamily?: string
 ) {
   const root = document.documentElement;
+
+  if (fontFamily === undefined || fontFamily === null) {
+    fontFamily = localStorage.getItem('nectar-font-family') ?? '';
+  }
+  root.style.setProperty('--nectar-font', fontStack(fontFamily));
 
   if (opacity === undefined || opacity === null) {
     const cachedOpacity = localStorage.getItem('nectar-theme-opacity');
@@ -206,9 +231,10 @@ export function initTheme() {
   const syncSaturation = syncSaturationVal !== null ? parseFloat(syncSaturationVal) : 0.50;
   const syncBrightnessVal = localStorage.getItem('nectar-theme-brightness');
   const syncBrightness = syncBrightnessVal !== null ? parseFloat(syncBrightnessVal) : 0.15;
+  const syncFont = localStorage.getItem('nectar-font-family') || '';
 
   // Fast synchronous draw using cached localStorage
-  applyTheme(syncMode, syncColor, syncOpacity, syncSaturation, syncBrightness);
+  applyTheme(syncMode, syncColor, syncOpacity, syncSaturation, syncBrightness, syncFont);
 
   // Sync settings.json in background to avoid flickers
   invoke<Record<string, any>>('load_settings').then((settings) => {
@@ -217,20 +243,23 @@ export function initTheme() {
     const opacityVal = settings['nectar-theme-opacity'] ? parseFloat(String(settings['nectar-theme-opacity'])) : syncOpacity;
     const saturationVal = settings['nectar-theme-saturation'] ? parseFloat(String(settings['nectar-theme-saturation'])) : syncSaturation;
     const brightnessVal = settings['nectar-theme-brightness'] ? parseFloat(String(settings['nectar-theme-brightness'])) : syncBrightness;
+    const font = settings['nectar-font-family'] !== undefined ? String(settings['nectar-font-family']) : syncFont;
 
     if (
       mode !== syncMode ||
       color !== syncColor ||
       opacityVal !== syncOpacity ||
       saturationVal !== syncSaturation ||
-      brightnessVal !== syncBrightness
+      brightnessVal !== syncBrightness ||
+      font !== syncFont
     ) {
       localStorage.setItem('nectar-theme-mode', mode);
       localStorage.setItem('nectar-theme-color', color);
       localStorage.setItem('nectar-theme-opacity', String(opacityVal));
       localStorage.setItem('nectar-theme-saturation', String(saturationVal));
       localStorage.setItem('nectar-theme-brightness', String(brightnessVal));
-      applyTheme(mode, color, opacityVal, saturationVal, brightnessVal);
+      localStorage.setItem('nectar-font-family', font);
+      applyTheme(mode, color, opacityVal, saturationVal, brightnessVal, font);
     }
   }).catch(console.error);
 
@@ -241,10 +270,11 @@ export function initTheme() {
     const opacity = parseFloat(localStorage.getItem('nectar-theme-opacity') || '0.80');
     const saturation = parseFloat(localStorage.getItem('nectar-theme-saturation') || '0.50');
     const brightness = parseFloat(localStorage.getItem('nectar-theme-brightness') || '0.15');
-    applyTheme(mode, color, opacity, saturation, brightness);
+    const font = localStorage.getItem('nectar-font-family') || '';
+    applyTheme(mode, color, opacity, saturation, brightness, font);
   };
 
-  const nectarThemeKeys = ['nectar-theme-mode', 'nectar-theme-color', 'nectar-theme-opacity', 'nectar-theme-saturation', 'nectar-theme-brightness'];
+  const nectarThemeKeys = ['nectar-theme-mode', 'nectar-theme-color', 'nectar-theme-opacity', 'nectar-theme-saturation', 'nectar-theme-brightness', 'nectar-font-family'];
 
   // Listen to setting changes broadcasted from settings window
   // (localStorage sync is handled by saveAndLocal in Settings.tsx; we just apply the theme)

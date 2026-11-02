@@ -70,6 +70,9 @@ export function useSettings() {
   );
   const [mediaAmbienceEnabled, setMediaAmbienceEnabled] = useState(true);
   const [mediaCompactGlowEnabled, setMediaCompactGlowEnabled] = useState(true);
+  const [mediaArtworkThemeEnabled, setMediaArtworkThemeEnabled] = useState(
+    () => localStorage.getItem("nectar-media-artwork-theme") === "true"
+  );
   const [mediaLayout, setMediaLayout] = useState<"classic" | "compact">(
     () => (localStorage.getItem("nectar-media-layout") as "classic" | "compact") || "classic"
   );
@@ -194,6 +197,9 @@ export function useSettings() {
     const val = localStorage.getItem("nectar-theme-brightness");
     return val !== null ? parseFloat(val) : 0.15;
   });
+  const [fontFamily, setFontFamily] = useState(
+    () => localStorage.getItem("nectar-font-family") || ""
+  );
   const [exportStatus, setExportStatus] = useState<"idle" | "exporting" | "success" | "error">("idle");
   const [importStatus, setImportStatus] = useState<"idle" | "importing" | "success" | "error">("idle");
   const [resetStatus, setResetStatus] = useState<"idle" | "confirm" | "resetting">("idle");
@@ -232,6 +238,7 @@ export function useSettings() {
       apply(getVal("nectar-brightness-overlay-enabled"), setBrightnessOverlayEnabled, readBool);
       apply(getVal("nectar-media-ambience-enabled"), setMediaAmbienceEnabled, readBool);
       apply(getVal("nectar-media-compact-glow-enabled"), setMediaCompactGlowEnabled, readBool);
+      apply(getVal("nectar-media-artwork-theme"), setMediaArtworkThemeEnabled, (v) => v === "true");
       apply(getVal("nectar-corners-enabled"), setCornersEnabled, readBool);
       apply(getVal("nectar-time-format-24h"), setTimeFormat24h, readBool);
       apply(getVal("nectar-legacy-mode"), setLegacyMode, readBool);
@@ -291,6 +298,7 @@ export function useSettings() {
       apply(getVal("nectar-theme-opacity"), setThemeOpacity, parseFloat);
       apply(getVal("nectar-theme-saturation"), setThemeSaturation, parseFloat);
       apply(getVal("nectar-theme-brightness"), setThemeBrightness, parseFloat);
+      apply(getVal("nectar-font-family"), setFontFamily, (v) => v);
 
       const widgetsVal = getVal("nectar-status-widgets");
       if (widgetsVal) {
@@ -381,6 +389,7 @@ export function useSettings() {
     "nectar-notch-remember-mode": setRememberMode,
     "nectar-media-ambience-enabled": setMediaAmbienceEnabled,
     "nectar-media-compact-glow-enabled": setMediaCompactGlowEnabled,
+    "nectar-media-artwork-theme": setMediaArtworkThemeEnabled,
     "nectar-media-layout": setMediaLayout,
     "nectar-corners-enabled": setCornersEnabled,
     "nectar-show-update-indicator": setShowUpdateIndicator,
@@ -400,6 +409,7 @@ export function useSettings() {
     "nectar-theme-opacity": setThemeOpacity,
     "nectar-theme-saturation": setThemeSaturation,
     "nectar-theme-brightness": setThemeBrightness,
+    "nectar-font-family": (v) => setFontFamily(v === null || v === undefined ? "" : String(v)),
     "nectar-weather-city": (v) => {
       setCityName(v || "");
       setCityQuery(v || "");
@@ -641,6 +651,12 @@ export function useSettings() {
     const next = !mediaCompactGlowEnabled;
     setMediaCompactGlowEnabled(next);
     saveSetting("nectar-media-compact-glow-enabled", String(next));
+  };
+
+  const toggleArtworkTheme = () => {
+    const next = !mediaArtworkThemeEnabled;
+    setMediaArtworkThemeEnabled(next);
+    saveSetting("nectar-media-artwork-theme", String(next));
   };
 
   const toggleCorners = () => {
@@ -928,6 +944,12 @@ export function useSettings() {
     saveSetting("nectar-theme-brightness", String(value));
   };
 
+  const handleFontFamilyChange = (value: string) => {
+    const next = value.slice(0, 80);
+    setFontFamily(next);
+    saveSetting("nectar-font-family", next);
+  };
+
   // ── City search ──
   const selectCity = async (city: {
     name: string;
@@ -1068,6 +1090,8 @@ export function useSettings() {
     handleSaturationChange,
     themeBrightness,
     handleBrightnessChange,
+    fontFamily,
+    handleFontFamilyChange,
 
     // Notch
     notchMode,
@@ -1103,6 +1127,8 @@ export function useSettings() {
     toggleAmbience,
     mediaCompactGlowEnabled,
     toggleCompactGlow,
+    mediaArtworkThemeEnabled,
+    toggleArtworkTheme,
 
     // Weather
     weatherEnabled,

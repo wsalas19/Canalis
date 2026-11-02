@@ -1,56 +1,64 @@
+/* Windows caption buttons: flush with the title bar edge, full height, flat
+   until hovered. The macOS traffic lights were only correct on macOS. */
 .wc {
   display: flex;
-  align-items: center;
-  gap: 8px;
+  align-items: stretch;
+  align-self: stretch;
+  margin-left: auto;
   -webkit-app-region: no-drag;
 }
 
 .wc-btn {
-  position: relative;
-  width: 12px;
-  height: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 46px;
   padding: 0;
   border: none;
-  border-radius: 50%;
-  cursor: pointer;
+  border-radius: 0;
+  background: transparent;
+  color: var(--window-title, rgba(255, 255, 255, 0.7));
+  cursor: default;
   -webkit-app-region: no-drag;
-  transition: background-color 0.15s ease, filter 0.15s ease;
+  transition: background-color 0.12s ease, color 0.12s ease;
 }
 
-.wc-btn::before {
-  content: "";
-  position: absolute;
-  inset: -8px;
-  border-radius: 50%;
-  -webkit-app-region: no-drag;
+.wc-btn:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--nectar-text, #fff);
 }
 
-.wc-btn.close {
-  background: #ff5f57;
+.wc-btn:active {
+  background: rgba(255, 255, 255, 0.14);
 }
 
-.wc-btn.minimize {
-  background: #febc2e;
+.wc-btn.close:hover {
+  background: #c42b1c;
+  color: #fff;
 }
 
-.wc-btn.zoom {
-  background: #28c840;
+.wc-btn.close:active {
+  background: #b02a1b;
+  color: #fff;
 }
 
-.wc-btn:not(:disabled):hover {
-  filter: brightness(1.1);
-}
-
-.wc-btn:not(:disabled):active {
-  filter: brightness(0.75);
-}
-
-.wc-btn:disabled,
 .wc.blurred .wc-btn {
-  background: rgba(255, 255, 255, 0.16);
+  color: rgba(255, 255, 255, 0.35);
 }
 
-.light-mode .wc-btn:disabled,
+.light-mode .wc-btn {
+  color: var(--window-title, rgba(0, 0, 0, 0.65));
+}
+
+.light-mode .wc-btn:hover {
+  background: rgba(0, 0, 0, 0.06);
+  color: #111;
+}
+
+.light-mode .wc-btn:active {
+  background: rgba(0, 0, 0, 0.1);
+}
+
 .light-mode .wc.blurred .wc-btn {
-  background: rgba(0, 0, 0, 0.14);
+  color: rgba(0, 0, 0, 0.35);
 }

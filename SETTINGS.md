@@ -133,6 +133,7 @@ Removing a link or disconnecting the account deletes its stored secret and cache
 | `nectar-media-compact-glow-enabled` | `"true"` / `"false"` | `"true"` | Glow effect around the collapsed compact thumbnail. |
 | `nectar-media-visualizer-enabled` | `"true"` / `"false"` | `"true"` | Audio visualizer bars in music mode. Also accepts `nectar-visualizer-enabled` (legacy alias). |
 | `nectar-media-album-art-enabled` | `"true"` / `"false"` | `"true"` | Show album artwork in the notch music display. |
+| `nectar-media-artwork-theme` | `"true"` / `"false"` | `"false"` | Tint the notch music panel with colors extracted from the album art. |
 
 ### Overlays
 
@@ -153,6 +154,7 @@ Removing a link or disconnecting the account deletes its stored secret and cache
 | `nectar-theme-saturation` | float string | `"0.50"` | Color saturation for custom/adaptive themes (0.0 to 1.0). |
 | `nectar-theme-brightness` | float string | `"0.15"` | Background brightness for custom/adaptive themes (0.0 to 1.0). |
 | `nectar-corners-enabled` | `"true"` / `"false"` | `"false"` | Render rounded screen corner overlays on top edges. |
+| `nectar-font-family` | string | `""` | Font family to use across the notch, dock and windows. Empty = system default stack. Accepts any family installed on the machine, or a full CSS font list. |
 
 ### Status Widgets
 

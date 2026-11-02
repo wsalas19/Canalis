@@ -1,5 +1,5 @@
 :root {
-  --cw-bg: rgba(10, 10, 15, 0.75);
+  --cw-bg: var(--nectar-bg, rgba(0, 0, 0, 0.8));
   --cw-bar: rgba(255, 255, 255, 0.02);
   --cw-bar-line: rgba(255, 255, 255, 0.05);
   --cw-title: rgba(255, 255, 255, 0.7);
@@ -10,7 +10,7 @@
 }
 
 .light-mode {
-  --cw-bg: rgba(246, 246, 248, 0.72);
+  --cw-bg: var(--nectar-bg, rgba(246, 246, 248, 0.72));
   --cw-line: rgba(0, 0, 0, 0.1);
   --cw-bar: rgba(0, 0, 0, 0.02);
   --cw-bar-line: rgba(0, 0, 0, 0.06);
@@ -20,7 +20,7 @@
 body {
   margin: 0;
   padding: 0;
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  font-family: var(--nectar-font, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif);
   background-color: transparent;
   color: var(--cw-text);
   user-select: none;
@@ -59,7 +59,7 @@ button {
   height: 36px;
   flex-shrink: 0;
   box-sizing: border-box;
-  padding: 0 14px;
+  padding: 0 0 0 14px;
   background: var(--cw-bar);
   border-bottom: 1px solid var(--cw-bar-line);
   -webkit-app-region: drag;
