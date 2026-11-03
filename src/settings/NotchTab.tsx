@@ -32,6 +32,7 @@ import { zoneOffsetLabel } from "../dualClock";
 import type { WidgetConfig, MonitorInfo, MonitorMode } from "./types";
 import { usePerMonitor } from "./usePerMonitor";
 import { useT } from "../i18n";
+import { openUrl } from "@tauri-apps/plugin-opener";
 
 interface NotchTabProps {
   notchMode: string;
@@ -507,6 +508,21 @@ export function NotchTab({
             )}
           </div>
         )}
+
+        <div className="weather-credit">
+          <span>{t("notch.weather.credit")}</span>{" "}
+          <a
+            href="https://open-meteo.com/"
+            target="_blank"
+            rel="noreferrer"
+            onClick={(e) => {
+              e.preventDefault();
+              openUrl("https://open-meteo.com/").catch(() => {});
+            }}
+          >
+            Open-Meteo.com
+          </a>
+        </div>
       </SettingSection>
 
       <SettingSection id="notch-widgets" title={t("notch.widgets.group")}>

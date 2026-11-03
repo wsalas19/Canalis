@@ -49,6 +49,8 @@ import {
   MemoryStick,
   HardDrive,
   ArrowUpDown,
+  Thermometer,
+  Droplets,
 } from "lucide-react";
 
 // Timer chime, synthesized with Web Audio so there's no asset. The context is made on the
@@ -770,7 +772,16 @@ function AppNotch() {
   }, [albumArtUrl, settingsArtworkTheme]);
 
   // Weather hook
-  const { temperature, weatherCondition, weatherIcon: WeatherIcon, cityName, tempUnit } = useWeather(settingsWeatherEnabled);
+  const {
+    temperature,
+    apparentTemperature,
+    humidity,
+    weatherCondition,
+    weatherIcon: WeatherIcon,
+    cityName,
+    tempUnit,
+  } = useWeather(settingsWeatherEnabled);
+  const tempSuffix = tempUnit === "fahrenheit" ? "F" : "C";
 
   const refreshNotchMode = () => {
     invoke<string>('get_notch_mode_for_window').then(setNotchMode).catch(() => {});
@@ -1687,9 +1698,39 @@ function AppNotch() {
       case "weather":
         if (!settingsWeatherEnabled || temperature === null) return null;
         return (
-          <div className="passive-feature" key="weather" {...tip(cityName ? `${conditionLabel(weatherCondition)} — ${cityName}` : conditionLabel(weatherCondition))}>
+          <div
+            className="passive-feature"
+            key="weather"
+            {...tip(
+              `${cityName ? `${conditionLabel(weatherCondition)} — ${cityName}` : conditionLabel(weatherCondition)} · Open-Meteo.com`,
+            )}
+          >
             <WeatherIcon size={12} strokeWidth={2.2} />
-            <span className="label">{temperature}°{tempUnit === "fahrenheit" ? "F" : "C"}</span>
+            <span className="label">{temperature}°{tempSuffix}</span>
+          </div>
+        );
+      case "apparent":
+        if (!settingsWeatherEnabled || apparentTemperature === null) return null;
+        return (
+          <div
+            className="passive-feature"
+            key="apparent"
+            {...tip(`${t("widgets.apparent.tip")} ${apparentTemperature}°${tempSuffix}`)}
+          >
+            <Thermometer size={12} strokeWidth={2} />
+            <span className="label">{apparentTemperature}°{tempSuffix}</span>
+          </div>
+        );
+      case "humidity":
+        if (!settingsWeatherEnabled || humidity === null) return null;
+        return (
+          <div
+            className="passive-feature"
+            key="humidity"
+            {...tip(`${t("widgets.humidity.tip")} ${humidity}%`)}
+          >
+            <Droplets size={12} strokeWidth={2} />
+            <span className="label">{humidity}%</span>
           </div>
         );
       case "battery":

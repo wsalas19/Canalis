@@ -459,6 +459,21 @@ input:checked + .slider:before {
   color: var(--nectar-text-muted, rgba(255, 255, 255, 0.2));
 }
 
+.weather-credit {
+  margin: 6px 14px 10px 54px;
+  font-size: var(--text-caption);
+  color: var(--text-muted);
+}
+
+.weather-credit a {
+  color: var(--nectar-accent, #007aff);
+  text-decoration: none;
+}
+
+.weather-credit a:hover {
+  text-decoration: underline;
+}
+
 .city-clear-btn {
   position: absolute;
   right: 0;

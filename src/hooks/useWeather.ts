@@ -57,6 +57,8 @@ const REFRESH_INTERVAL_MS = 30 * 60 * 1000; // 30 minutes
 
 interface WeatherState {
   temperature: number | null;
+  apparentTemperature: number | null;
+  humidity: number | null;
   weatherCondition: string;
   weatherIcon: ComponentType<LucideProps>;
 }
@@ -104,7 +106,7 @@ async function fetchWeatherForCoords(
 ): Promise<WeatherState> {
   const unitParam = unit === "fahrenheit" ? "&temperature_unit=fahrenheit" : "";
   const response = await fetch(
-    `https://api.open-meteo.com/v1/forecast?latitude=${latitude}&longitude=${longitude}&current=temperature_2m,weather_code,is_day&timezone=auto${unitParam}`,
+    `https://api.open-meteo.com/v1/forecast?latitude=${latitude}&longitude=${longitude}&current=temperature_2m,apparent_temperature,relative_humidity_2m,weather_code,is_day&timezone=auto${unitParam}`,
   );
 
   if (!response.ok) {
@@ -118,12 +120,22 @@ async function fetchWeatherForCoords(
   }
 
   const temp = Math.round(data.current.temperature_2m);
+  const apparentTemperature =
+    typeof data.current.apparent_temperature === "number"
+      ? Math.round(data.current.apparent_temperature)
+      : null;
+  const humidity =
+    typeof data.current.relative_humidity_2m === "number"
+      ? Math.round(data.current.relative_humidity_2m)
+      : null;
   const code = data.current.weather_code;
   const condition = WMO_CODES[code] || "Unknown";
   const isDay = data.current.is_day === 1;
 
   return {
     temperature: temp,
+    apparentTemperature,
+    humidity,
     weatherCondition: condition,
     weatherIcon: getWeatherIcon(condition, isDay),
   };
@@ -225,6 +237,8 @@ async function resolveLocation(): Promise<ResolvedLocation | null> {
 async function persistWeather(
   temp: number | null,
   condition: string,
+  apparent: number | null,
+  humidity: number | null,
 ): Promise<void> {
   if (temp !== null) {
     invoke("save_setting", {
@@ -238,6 +252,18 @@ async function persistWeather(
       value: condition,
     }).catch(() => {});
   }
+  if (apparent !== null) {
+    invoke("save_setting", {
+      key: "nectar-weather-cached-apparent",
+      value: apparent,
+    }).catch(() => {});
+  }
+  if (humidity !== null) {
+    invoke("save_setting", {
+      key: "nectar-weather-cached-humidity",
+      value: humidity,
+    }).catch(() => {});
+  }
 }
 
 export function useWeather(enabled: boolean) {
@@ -248,6 +274,14 @@ export function useWeather(enabled: boolean) {
   const [weatherCondition, setWeatherCondition] = useState<string>(
     () => localStorage.getItem("nectar-weather-cached-condition") || "",
   );
+  const [apparentTemperature, setApparentTemperature] = useState<number | null>(() => {
+    const cached = localStorage.getItem("nectar-weather-cached-apparent");
+    return cached !== null ? Number(cached) : null;
+  });
+  const [humidity, setHumidity] = useState<number | null>(() => {
+    const cached = localStorage.getItem("nectar-weather-cached-humidity");
+    return cached !== null ? Number(cached) : null;
+  });
   const [weatherIcon, setWeatherIcon] = useState<ComponentType<LucideProps>>(
     () => Thermometer,
   );
@@ -279,9 +313,16 @@ export function useWeather(enabled: boolean) {
         );
 
         setTemperature(result.temperature);
+        setApparentTemperature(result.apparentTemperature);
+        setHumidity(result.humidity);
         setWeatherCondition(result.weatherCondition);
         setWeatherIcon(() => result.weatherIcon);
-        persistWeather(result.temperature, result.weatherCondition);
+        persistWeather(
+          result.temperature,
+          result.weatherCondition,
+          result.apparentTemperature,
+          result.humidity,
+        );
 
         // Update city name if resolved from IP geolocation
         if (location.city) {
@@ -293,6 +334,8 @@ export function useWeather(enabled: boolean) {
         if (!showStaleOnError && import.meta.env.DEV) {
           const mockTemp = tempUnitRef.current === "fahrenheit" ? 72 : 22;
           setTemperature(mockTemp);
+          setApparentTemperature(mockTemp - 1);
+          setHumidity(64);
           setWeatherCondition("Partly Cloudy");
           setWeatherIcon(() => Cloud);
         }
@@ -317,6 +360,18 @@ export function useWeather(enabled: boolean) {
         if (cachedCond) {
           setWeatherCondition(String(cachedCond));
           setWeatherIcon(() => getWeatherIcon(String(cachedCond)));
+        }
+        const cachedApparent =
+          settings["nectar-weather-cached-apparent"] ??
+          localStorage.getItem("nectar-weather-cached-apparent");
+        if (cachedApparent !== undefined && cachedApparent !== null && cachedApparent !== "") {
+          setApparentTemperature(Number(cachedApparent));
+        }
+        const cachedHumidity =
+          settings["nectar-weather-cached-humidity"] ??
+          localStorage.getItem("nectar-weather-cached-humidity");
+        if (cachedHumidity !== undefined && cachedHumidity !== null && cachedHumidity !== "") {
+          setHumidity(Number(cachedHumidity));
         }
         const savedUnit =
           settings["nectar-temp-unit"] ?? localStorage.getItem("nectar-temp-unit");
@@ -424,6 +479,8 @@ export function useWeather(enabled: boolean) {
 
   return {
     temperature,
+    apparentTemperature,
+    humidity,
     weatherCondition,
     weatherIcon,
     cityName,

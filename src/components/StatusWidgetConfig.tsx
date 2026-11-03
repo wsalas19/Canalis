@@ -29,6 +29,8 @@ import {
   ArrowLeftRight,
   ChevronUp,
   ChevronDown,
+  Thermometer,
+  Droplets,
 } from "lucide-react";
 import type { ComponentType, SVGProps } from "react";
 import { useT } from "../i18n";
@@ -46,6 +48,8 @@ interface WidgetDef {
 
 const WIDGET_DEFS: WidgetDef[] = [
   { id: "weather", icon: CloudSun, color: "#60a5fa" },
+  { id: "apparent", icon: Thermometer, color: "#fbbf24" },
+  { id: "humidity", icon: Droplets, color: "#22d3ee" },
   { id: "battery", icon: BatteryFull, color: "#4ade80" },
   { id: "cpu", icon: Cpu, color: "#f97316" },
   { id: "ram", icon: MemoryStick, color: "#a78bfa" },
