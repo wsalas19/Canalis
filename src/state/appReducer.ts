@@ -32,7 +32,7 @@ export interface MediaSession {
   active: boolean;
 }
 
-export type NectarMode = "music" | "calendar" | "command-center" | "status" | "shelf" | "tour";
+export type NectarMode = "music" | "calendar" | "command-center" | "status" | "shelf" | "tour" | "weather";
 export type CcView = "main" | "wifi" | "bluetooth" | "audio";
 export type InteractionState = "active" | "grace" | "none";
 

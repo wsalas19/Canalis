@@ -64,6 +64,9 @@ function parseDrives(val: string | null): string[] {
 export function useSettings() {
   const [autostart, setAutostart] = useState(false);
   const [weatherEnabled, setWeatherEnabled] = useState(true);
+  const [weatherBlockEnabled, setWeatherBlockEnabled] = useState(
+    () => localStorage.getItem("nectar-weather-block-enabled") === "true"
+  );
   const [calendarEnabled, setCalendarEnabled] = useState(true);
   const [timerEnabled, setTimerEnabled] = useState(true);
   const [timerSoundEnabled, setTimerSoundEnabled] = useState(true);
@@ -254,6 +257,7 @@ export function useSettings() {
       };
 
       apply(getVal("nectar-weather-enabled"), setWeatherEnabled, readBool);
+      apply(getVal("nectar-weather-block-enabled"), setWeatherBlockEnabled, readBool);
       apply(getVal("nectar-calendar-enabled"), setCalendarEnabled, readBool);
       apply(getVal("nectar-timer-enabled") ?? getVal("nectar-calendar-enabled"), setTimerEnabled, readBool);
       apply(getVal("nectar-timer-sound-enabled"), setTimerSoundEnabled, readBool);
@@ -407,6 +411,7 @@ export function useSettings() {
     "nectar-dock-calendar-enabled": setDockCalendarEnabled,
     "nectar-dock-mixed-reorder": setDockMixedReorder,
     "nectar-weather-enabled": setWeatherEnabled,
+    "nectar-weather-block-enabled": setWeatherBlockEnabled,
     "nectar-calendar-enabled": setCalendarEnabled,
     "nectar-timer-enabled": setTimerEnabled,
     "nectar-timer-sound-enabled": setTimerSoundEnabled,
@@ -570,6 +575,12 @@ export function useSettings() {
     const next = !weatherEnabled;
     setWeatherEnabled(next);
     saveSetting("nectar-weather-enabled", String(next));
+  };
+
+  const toggleWeatherBlock = () => {
+    const next = !weatherBlockEnabled;
+    setWeatherBlockEnabled(next);
+    saveSetting("nectar-weather-block-enabled", String(next));
   };
 
   const toggleCalendar = () => {
@@ -1166,6 +1177,8 @@ export function useSettings() {
     // Weather
     weatherEnabled,
     toggleWeather,
+    weatherBlockEnabled,
+    toggleWeatherBlock,
     tempUnitFahrenheit,
     toggleTempUnit,
     cityName,

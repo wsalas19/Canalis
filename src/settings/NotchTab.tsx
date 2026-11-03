@@ -8,6 +8,7 @@ import {
   Sparkles,
   Circle,
   CloudSun,
+  LayoutDashboard,
   X,
   Monitor,
   MonitorCheck,
@@ -91,6 +92,8 @@ interface NotchTabProps {
   resetCcLayout: () => void;
   weatherEnabled: boolean;
   toggleWeather: () => void;
+  weatherBlockEnabled: boolean;
+  toggleWeatherBlock: () => void;
   tempUnitFahrenheit: boolean;
   toggleTempUnit: () => void;
   cityName: string;
@@ -164,6 +167,8 @@ export function NotchTab({
   resetCcLayout,
   weatherEnabled,
   toggleWeather,
+  weatherBlockEnabled,
+  toggleWeatherBlock,
   tempUnitFahrenheit,
   toggleTempUnit,
   cityName,
@@ -452,6 +457,15 @@ export function NotchTab({
             </label>
           </div>
         </SettingRow>
+
+        {weatherEnabled && (
+          <SettingRow icon={LayoutDashboard} label={t("notch.weatherBlock")} desc={t("notch.weatherBlock.desc")}>
+            <label className="toggle-switch">
+              <input type="checkbox" checked={weatherBlockEnabled} onChange={toggleWeatherBlock} />
+              <span className="slider"></span>
+            </label>
+          </SettingRow>
+        )}
 
         {weatherEnabled && (
           <div className="manual-city-input">

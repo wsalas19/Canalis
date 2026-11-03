@@ -20,7 +20,7 @@ import {
   useUiActions,
   useUiState,
 } from "./state/AppProviders";
-import type { MediaInfo, WifiStatus } from "./state/appReducer";
+import type { MediaInfo, NectarMode, WifiStatus } from "./state/appReducer";
 import { useWeather } from "./hooks/useWeather";
 import { useSettingsSync } from "./hooks/useSettingsSync";
 import { useTrailingThrottle } from "./hooks/useTrailingThrottle";
@@ -34,6 +34,7 @@ import { t as translate, useT } from "./i18n";
 import { NotchShelf, useShelf } from "./components/NotchShelf";
 import { parseCcLayout, parsePanelOrder, resolveCcLayout, type CcKind } from "./panelOrder";
 import { NotchProgressBorder } from "./components/NotchProgressBorder";
+import { WeatherPanel } from "./WeatherPanel";
 import {
   DEFAULT_DUAL_CLOCK_ZONE,
   dayShiftLabel,
@@ -707,6 +708,7 @@ function AppNotch() {
 
   // Settings state
   const [settingsWeatherEnabled, setSettingsWeatherEnabled] = useState(() => localStorage.getItem("nectar-weather-enabled") !== "false");
+  const [settingsWeatherBlockEnabled, setSettingsWeatherBlockEnabled] = useState(() => localStorage.getItem("nectar-weather-block-enabled") === "true");
   const [settingsCalendarEnabled, setSettingsCalendarEnabled] = useState(() => localStorage.getItem("nectar-calendar-enabled") !== "false");
   const [settingsTimerEnabled, setSettingsTimerEnabled] = useState(
     () => (localStorage.getItem("nectar-timer-enabled") ?? localStorage.getItem("nectar-calendar-enabled")) !== "false",
@@ -739,7 +741,7 @@ function AppNotch() {
     const index = ccResolved[kind].indexOf(id);
     return index < 0 ? { display: 'none' as const } : { order: index };
   };
-  const rememberedModeRef = useRef<"command-center" | "calendar" | null>(null);
+  const rememberedModeRef = useRef<"command-center" | "calendar" | "weather" | null>(null);
   const [settingsVisualizerEnabled, setSettingsVisualizerEnabled] = useState(() => localStorage.getItem("nectar-visualizer-enabled") !== "false");
   const [settingsAlbumArtEnabled, setSettingsAlbumArtEnabled] = useState(() => localStorage.getItem("nectar-media-album-art-enabled") !== "false");
   const [settingsAmbienceEnabled, setSettingsAmbienceEnabled] = useState(() => localStorage.getItem("nectar-media-ambience-enabled") !== "false");
@@ -780,7 +782,9 @@ function AppNotch() {
     weatherIcon: WeatherIcon,
     cityName,
     tempUnit,
-  } = useWeather(settingsWeatherEnabled);
+    snapshot: weatherSnapshot,
+    refresh: refreshWeather,
+  } = useWeather(settingsWeatherEnabled, isVisible && !isHidden && !isFullscreen, settingsWeatherBlockEnabled);
   const tempSuffix = tempUnit === "fahrenheit" ? "F" : "C";
 
   const refreshNotchMode = () => {
@@ -809,6 +813,7 @@ function AppNotch() {
       };
 
       setSettingsWeatherEnabled(getVal("nectar-weather-enabled", "true") !== "false");
+      setSettingsWeatherBlockEnabled(getVal("nectar-weather-block-enabled", "false") === "true");
       setSettingsCalendarEnabled(getVal("nectar-calendar-enabled", "true") !== "false");
       setSettingsTimerEnabled((getVal("nectar-timer-enabled") ?? getVal("nectar-calendar-enabled", "true")) !== "false");
       setSettingsTimerSoundEnabled(getVal("nectar-timer-sound-enabled", "true") !== "false");
@@ -954,6 +959,7 @@ function AppNotch() {
   useSettingsSync(
     {
       "nectar-weather-enabled": setSettingsWeatherEnabled,
+      "nectar-weather-block-enabled": setSettingsWeatherBlockEnabled,
       "nectar-calendar-enabled": setSettingsCalendarEnabled,
       "nectar-timer-enabled": setSettingsTimerEnabled,
       "nectar-timer-sound-enabled": setSettingsTimerSoundEnabled,
@@ -1077,11 +1083,12 @@ function AppNotch() {
   // Paused:  command-center → status → music → calendar (secondary, after status)
   const availableNotchModes = () => {
     const musicBeforeStatus = isPlaying && mediaInfo.has_media && settingsMusicModeEnabled;
-    const modes: ('command-center' | 'status' | 'music' | 'calendar' | 'shelf')[] = panelOrder
+    const modes: NectarMode[] = panelOrder
       ? [...panelOrder]
       : musicBeforeStatus
         ? ['command-center', 'music', 'status', 'calendar', 'shelf']
         : ['command-center', 'status', 'music', 'calendar', 'shelf'];
+    if (settingsWeatherBlockEnabled && settingsWeatherEnabled) modes.push('weather');
     return modes.filter(m => {
       if (m === 'music' && (!settingsMusicModeEnabled || !mediaInfo.has_media)) return false;
       if (m === 'calendar' && !productivityEnabled) return false;
@@ -1093,7 +1100,12 @@ function AppNotch() {
 
   const handleWheel = (e: React.WheelEvent) => {
     const target = e.target as HTMLElement;
-    if (target.closest('.calendar-grid') || target.closest('.timer-column') || target.closest('.cal-scroll')) {
+    if (
+      target.closest('.calendar-grid') ||
+      target.closest('.timer-column') ||
+      target.closest('.cal-scroll') ||
+      target.closest('.weather-panel')
+    ) {
       return;
     }
 
@@ -1699,8 +1711,16 @@ function AppNotch() {
         if (!settingsWeatherEnabled || temperature === null) return null;
         return (
           <div
-            className="passive-feature"
+            className={`passive-feature${settingsWeatherBlockEnabled ? " clickable" : ""}`}
             key="weather"
+            onClick={
+              settingsWeatherBlockEnabled
+                ? (e) => {
+                    e.stopPropagation();
+                    setNectarMode("weather");
+                  }
+                : undefined
+            }
             {...tip(
               `${cityName ? `${conditionLabel(weatherCondition)} — ${cityName}` : conditionLabel(weatherCondition)} · Open-Meteo.com`,
             )}
@@ -1796,10 +1816,14 @@ function AppNotch() {
   });
 
   useEffect(() => {
-    if ((nectarMode === 'command-center' && !panelControlCenter) || (nectarMode === 'shelf' && !panelShelf)) {
+    if (
+      (nectarMode === 'command-center' && !panelControlCenter) ||
+      (nectarMode === 'shelf' && !panelShelf) ||
+      (nectarMode === 'weather' && (!settingsWeatherBlockEnabled || !settingsWeatherEnabled))
+    ) {
       setNectarMode('status');
     }
-  }, [nectarMode, panelControlCenter, panelShelf]);
+  }, [nectarMode, panelControlCenter, panelShelf, settingsWeatherBlockEnabled, settingsWeatherEnabled]);
 
   // Music mode shows any time we have media info (playing or paused) and music mode setting is enabled
   const isMusicMode = mediaInfo.has_media && nectarMode === 'music' && settingsMusicModeEnabled;
@@ -1821,6 +1845,7 @@ function AppNotch() {
   const getDynamicWidth = () => {
     if (nectarMode === 'tour') return 380;
     if (nectarMode === 'shelf') return Math.max(300, Math.min(120 + shelf.items.length * 62, 460));
+    if (nectarMode === 'weather') return 360 + dualClockExtra;
     if (isCalendarMode) return Math.max(settingsCalendarEnabled && showClockColumn ? 480 : settingsCalendarEnabled ? 310 : 270, 140 + dualClockExtra);
     if (nectarMode === 'command-center' && isHovered) {
       const totalWidgets = statusWidgets.left.length + statusWidgets.right.length;
@@ -1852,6 +1877,7 @@ function AppNotch() {
     }
     if (nectarMode === 'tour') return 210;
     if (nectarMode === 'shelf') return shelf.items.length === 0 ? 96 : 130;
+    if (nectarMode === 'weather') return 360;
     if (nectarMode === 'calendar') return settingsCalendarEnabled ? (caldav.connected ? 350 : 310) : 262;
     if (nectarMode === 'command-center') {
       if (!isHovered) return 36;
@@ -1874,6 +1900,8 @@ function AppNotch() {
   };
 
   const isCalendarMode = nectarMode === 'calendar';
+  const isWeatherMode = nectarMode === 'weather';
+  const isPanelMode = isCalendarMode || isWeatherMode;
 
   // Album tints the whole notch, collapsed pill included. The expanded state
   // reads --nectar-bg-expanded and the muted/border vars live on :root, so all
@@ -1943,8 +1971,8 @@ function AppNotch() {
           scaleY: 1,
           borderTopLeftRadius: isImpacted ? 0 : 18,
           borderTopRightRadius: isImpacted ? 0 : 18,
-          borderBottomLeftRadius: isCalendarMode ? 28 : 18,
-          borderBottomRightRadius: isCalendarMode ? 28 : 18,
+          borderBottomLeftRadius: isPanelMode ? 28 : 18,
+          borderBottomRightRadius: isPanelMode ? 28 : 18,
           filter: "blur(0px)",
           pointerEvents: 'auto'
         }}
@@ -1961,11 +1989,11 @@ function AppNotch() {
         }}
         onHoverEnd={() => {
           setIsHovered(false);
-          if (nectarMode === 'command-center' || nectarMode === 'calendar') rememberedModeRef.current = nectarMode;
+          if (nectarMode === 'command-center' || nectarMode === 'calendar' || nectarMode === 'weather') rememberedModeRef.current = nectarMode;
           const targetMode = mediaInfo.has_media && isPlaying && settingsMusicCompactNotch ? 'music' : 'status';
           if (nectarMode === 'music') {
             setNectarMode(targetMode);
-          } else if (nectarMode === 'command-center' || nectarMode === 'calendar' || nectarMode === 'status' || nectarMode === 'shelf') {
+          } else if (nectarMode === 'command-center' || nectarMode === 'calendar' || nectarMode === 'status' || nectarMode === 'shelf' || nectarMode === 'weather') {
             setNectarMode(targetMode);
           }
         }}
@@ -2717,6 +2745,29 @@ function AppNotch() {
                 )}
               </AnimatePresence>
 
+              {/* Weather dashboard */}
+              <AnimatePresence>
+                {settingsWeatherEnabled && settingsWeatherBlockEnabled && isWeatherMode && (
+                  <motion.div
+                    key="weather"
+                    className="weather-panel-wrap"
+                    onClick={(e) => e.stopPropagation()}
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0, filter: "blur(4px)", transition: { duration: 0.1 } }}
+                    transition={{ type: "spring", stiffness: 400, damping: 30 }}
+                  >
+                    <WeatherPanel
+                      snapshot={weatherSnapshot}
+                      cityName={cityName}
+                      tempUnit={tempUnit}
+                      hour12={!timeFormat24h}
+                      onRefresh={refreshWeather}
+                    />
+                  </motion.div>
+                )}
+              </AnimatePresence>
+
             </motion.div>
           )}
         </AnimatePresence>
@@ -2726,7 +2777,7 @@ function AppNotch() {
             progress={timerProgressPercent}
             topRadius={isImpacted ? 0 : 18}
             flare={isImpacted ? 13 : 0}
-            bottomRadius={isCalendarMode ? 28 : 18}
+            bottomRadius={isPanelMode ? 28 : 18}
             paused={!isTimerRunning}
             finished={isTimerFinished}
             title={`${formatTimerTime(timerSeconds)} (${Math.round(timerProgressRatio * 100)}%)`}

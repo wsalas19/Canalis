@@ -82,6 +82,7 @@ With **All Monitors** and more than one display, the **Per-Monitor Behavior** to
 | `nectar-weather-lon` | number string | (auto) | Longitude coordinate for weather. Set automatically when a city is selected. |
 | `nectar-weather-cached-temp` | number string | (none) | Cached temperature value shown before next API fetch. |
 | `nectar-weather-cached-condition` | string | (none) | Cached weather condition text (e.g. "Partly Cloudy"). |
+| `nectar-weather-block-enabled` | `"true"` / `"false"` | `"false"` | Show the weather dashboard panel in the notch (hourly + 3-day detail). |
 | `nectar-temp-unit` | `"celsius"` / `"fahrenheit"` | `"celsius"` | Temperature display unit. |
 
 ### Modules

@@ -54,6 +54,57 @@ const WMO_CODES: Record<number, string> = {
 };
 
 const REFRESH_INTERVAL_MS = 30 * 60 * 1000; // 30 minutes
+// The dashboard reuses the same cadence: Open-Meteo models update hourly to
+// 6-hourly, so polling faster only re-reads the same forecast.
+const DASHBOARD_REFRESH_MS = 30 * 60 * 1000;
+const SNAPSHOT_KEY = "nectar-weather-snapshot";
+const SNAPSHOT_TTL_MS = 30 * 60 * 1000;
+
+export interface WeatherHour {
+  time: string;
+  temperature: number;
+  apparent: number;
+  precipProbability: number;
+  weatherCode: number;
+  isDay: boolean;
+  humidity: number;
+  windSpeed: number;
+  uvIndex: number;
+}
+
+export interface WeatherDay {
+  date: string;
+  weatherCode: number;
+  tempMax: number;
+  tempMin: number;
+  precipProbabilityMax: number;
+  sunrise: string;
+  sunset: string;
+  uvIndexMax: number;
+}
+
+export interface WeatherSnapshot {
+  savedAt: number;
+  timezone: string;
+  current: {
+    time: string;
+    temperature: number;
+    apparentTemperature: number;
+    humidity: number;
+    weatherCode: number;
+    isDay: boolean;
+    windSpeed: number;
+    windDirection: number;
+    windGusts: number;
+    precipitation: number;
+    cloudCover: number;
+    pressure: number;
+    uvIndex: number | null;
+    visibility: number | null;
+  };
+  hourly: WeatherHour[];
+  daily: WeatherDay[];
+}
 
 interface WeatherState {
   temperature: number | null;
@@ -69,7 +120,7 @@ interface ResolvedLocation {
   city?: string;
 }
 
-function getWeatherIcon(
+export function getWeatherIcon(
   condition: string,
   isDay = true,
 ): ComponentType<LucideProps> {
@@ -98,6 +149,8 @@ function getWeatherIcon(
       return Thermometer;
   }
 }
+
+export const conditionForCode = (code: number): string => WMO_CODES[code] || "Unknown";
 
 async function fetchWeatherForCoords(
   latitude: number,
@@ -139,6 +192,91 @@ async function fetchWeatherForCoords(
     weatherCondition: condition,
     weatherIcon: getWeatherIcon(condition, isDay),
   };
+}
+
+async function fetchSnapshotForCoords(
+  latitude: number,
+  longitude: number,
+  unit: string,
+): Promise<WeatherSnapshot> {
+  const unitParam = unit === "fahrenheit" ? "&temperature_unit=fahrenheit" : "";
+  const url =
+    `https://api.open-meteo.com/v1/forecast?latitude=${latitude}&longitude=${longitude}` +
+    `&current=temperature_2m,apparent_temperature,relative_humidity_2m,weather_code,is_day,wind_speed_10m,wind_direction_10m,wind_gusts_10m,precipitation,cloud_cover,pressure_msl,uv_index,visibility` +
+    `&hourly=temperature_2m,apparent_temperature,precipitation_probability,weather_code,is_day,relative_humidity_2m,wind_speed_10m,uv_index` +
+    `&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max,precipitation_sum,sunrise,sunset,uv_index_max` +
+    `&forecast_hours=24&forecast_days=3&timezone=auto${unitParam}`;
+  const response = await fetch(url);
+  if (!response.ok) {
+    throw new Error(`Weather API returned ${response.status}`);
+  }
+  const data = await response.json();
+  const c = data?.current;
+  if (!c || typeof c.temperature_2m !== "number") {
+    throw new Error("Invalid weather API response shape");
+  }
+
+  const hourlyTimes: string[] = data?.hourly?.time ?? [];
+  const hourly: WeatherHour[] = hourlyTimes.map((time, i) => ({
+    time,
+    temperature: data.hourly.temperature_2m?.[i] ?? 0,
+    apparent: data.hourly.apparent_temperature?.[i] ?? 0,
+    precipProbability: data.hourly.precipitation_probability?.[i] ?? 0,
+    weatherCode: data.hourly.weather_code?.[i] ?? 0,
+    isDay: data.hourly.is_day?.[i] === 1,
+    humidity: data.hourly.relative_humidity_2m?.[i] ?? 0,
+    windSpeed: data.hourly.wind_speed_10m?.[i] ?? 0,
+    uvIndex: data.hourly.uv_index?.[i] ?? 0,
+  }));
+
+  const d = data?.daily ?? {};
+  const dailyDates: string[] = d.time ?? [];
+  const daily: WeatherDay[] = dailyDates.map((date, i) => ({
+    date,
+    weatherCode: d.weather_code?.[i] ?? 0,
+    tempMax: d.temperature_2m_max?.[i] ?? 0,
+    tempMin: d.temperature_2m_min?.[i] ?? 0,
+    precipProbabilityMax: d.precipitation_probability_max?.[i] ?? 0,
+    sunrise: d.sunrise?.[i] ?? "",
+    sunset: d.sunset?.[i] ?? "",
+    uvIndexMax: d.uv_index_max?.[i] ?? 0,
+  }));
+
+  return {
+    savedAt: Date.now(),
+    timezone: data?.timezone ?? "",
+    current: {
+      time: c.time ?? "",
+      temperature: c.temperature_2m,
+      apparentTemperature: c.apparent_temperature ?? c.temperature_2m,
+      humidity: c.relative_humidity_2m ?? 0,
+      weatherCode: c.weather_code ?? 0,
+      isDay: c.is_day === 1,
+      windSpeed: c.wind_speed_10m ?? 0,
+      windDirection: c.wind_direction_10m ?? 0,
+      windGusts: c.wind_gusts_10m ?? 0,
+      precipitation: c.precipitation ?? 0,
+      cloudCover: c.cloud_cover ?? 0,
+      pressure: c.pressure_msl ?? 0,
+      uvIndex: typeof c.uv_index === "number" ? c.uv_index : null,
+      visibility: typeof c.visibility === "number" ? c.visibility : null,
+    },
+    hourly,
+    daily,
+  };
+}
+
+function readSnapshotCache(): WeatherSnapshot | null {
+  try {
+    const raw = localStorage.getItem(SNAPSHOT_KEY);
+    if (!raw) return null;
+    const snapshot = JSON.parse(raw) as WeatherSnapshot;
+    if (!snapshot?.savedAt || !snapshot.current) return null;
+    if (Date.now() - snapshot.savedAt > SNAPSHOT_TTL_MS) return null;
+    return snapshot;
+  } catch {
+    return null;
+  }
 }
 
 const IP_LOCATION_KEY = "nectar-weather-ip-location";
@@ -266,7 +404,8 @@ async function persistWeather(
   }
 }
 
-export function useWeather(enabled: boolean) {
+export function useWeather(enabled: boolean, active = true, dashboardEnabled = false) {
+  const [snapshot, setSnapshot] = useState<WeatherSnapshot | null>(null);
   const [temperature, setTemperature] = useState<number | null>(() => {
     const cached = localStorage.getItem("nectar-weather-cached-temp");
     return cached !== null ? Number(cached) : null;
@@ -298,6 +437,27 @@ export function useWeather(enabled: boolean) {
   const enabledRef = useRef(enabled);
   enabledRef.current = enabled;
 
+  const dashboardRef = useRef(dashboardEnabled);
+  dashboardRef.current = dashboardEnabled;
+
+  // Apply a full snapshot to the lightweight widget state so the pills and the
+  // dashboard never disagree.
+  const applySnapshot = useCallback((snap: WeatherSnapshot) => {
+    setSnapshot(snap);
+    const condition = conditionForCode(snap.current.weatherCode);
+    setTemperature(Math.round(snap.current.temperature));
+    setApparentTemperature(Math.round(snap.current.apparentTemperature));
+    setHumidity(Math.round(snap.current.humidity));
+    setWeatherCondition(condition);
+    setWeatherIcon(() => getWeatherIcon(condition, snap.current.isDay));
+    persistWeather(
+      Math.round(snap.current.temperature),
+      condition,
+      Math.round(snap.current.apparentTemperature),
+      Math.round(snap.current.humidity),
+    );
+  }, []);
+
   // Core fetch + refresh logic
   const doFetch = useCallback(
     async (showStaleOnError = true, coords?: { lat: number; lon: number }, city?: string) => {
@@ -306,23 +466,38 @@ export function useWeather(enabled: boolean) {
       try {
         const location = coords ? { ...coords, city: city } : await resolveLocation();
         if (!location) return;
-        const result = await fetchWeatherForCoords(
-          location.lat,
-          location.lon,
-          tempUnitRef.current,
-        );
 
-        setTemperature(result.temperature);
-        setApparentTemperature(result.apparentTemperature);
-        setHumidity(result.humidity);
-        setWeatherCondition(result.weatherCondition);
-        setWeatherIcon(() => result.weatherIcon);
-        persistWeather(
-          result.temperature,
-          result.weatherCondition,
-          result.apparentTemperature,
-          result.humidity,
-        );
+        if (dashboardRef.current) {
+          const snap = await fetchSnapshotForCoords(
+            location.lat,
+            location.lon,
+            tempUnitRef.current,
+          );
+          try {
+            localStorage.setItem(SNAPSHOT_KEY, JSON.stringify(snap));
+          } catch {
+            // storage full or unavailable — the in-memory snapshot still works
+          }
+          applySnapshot(snap);
+        } else {
+          const result = await fetchWeatherForCoords(
+            location.lat,
+            location.lon,
+            tempUnitRef.current,
+          );
+
+          setTemperature(result.temperature);
+          setApparentTemperature(result.apparentTemperature);
+          setHumidity(result.humidity);
+          setWeatherCondition(result.weatherCondition);
+          setWeatherIcon(() => result.weatherIcon);
+          persistWeather(
+            result.temperature,
+            result.weatherCondition,
+            result.apparentTemperature,
+            result.humidity,
+          );
+        }
 
         // Update city name if resolved from IP geolocation
         if (location.city) {
@@ -341,7 +516,7 @@ export function useWeather(enabled: boolean) {
         }
       }
     },
-    [],
+    [applySnapshot],
   );
 
   // Load cached values from Tauri settings on mount
@@ -421,6 +596,7 @@ export function useWeather(enabled: boolean) {
     const unlisten = listen<{ lat: number; lon: number; city?: string } | true>(
       "weather-refresh",
       (event) => {
+        localStorage.removeItem(SNAPSHOT_KEY);
         const payload = event.payload;
         if (
           payload &&
@@ -451,6 +627,7 @@ export function useWeather(enabled: boolean) {
         }
         if (key === "nectar-weather-city" || key === "nectar-weather-lat" || key === "nectar-weather-lon") {
           clearTimeout(timer);
+          localStorage.removeItem(SNAPSHOT_KEY);
           timer = setTimeout(() => doFetch(false), 250);
         }
       },
@@ -461,21 +638,45 @@ export function useWeather(enabled: boolean) {
     };
   }, [doFetch]);
 
-  // Initial fetch + 30-min interval
+  // Initial fetch + 30-min interval; paused while the notch is off screen.
   useEffect(() => {
-    if (!enabled) return;
+    if (!enabled || !active) return;
 
-    doFetch(false);
+    if (dashboardEnabled) {
+      const cached = readSnapshotCache();
+      if (cached) {
+        applySnapshot(cached);
+      } else {
+        doFetch(false);
+      }
+    } else {
+      doFetch(false);
+    }
 
-    const interval = setInterval(() => doFetch(false), REFRESH_INTERVAL_MS);
+    const interval = setInterval(
+      () => doFetch(false),
+      dashboardEnabled ? DASHBOARD_REFRESH_MS : REFRESH_INTERVAL_MS,
+    );
     return () => clearInterval(interval);
-  }, [enabled, doFetch]);
+  }, [enabled, active, dashboardEnabled, doFetch, applySnapshot]);
 
-  // Re-fetch when temperature unit changes (without resetting interval)
+  // Re-fetch when temperature unit changes (without resetting interval). The
+  // first run is skipped because the effect above already fetched on mount.
+  const unitEffectReady = useRef(false);
   useEffect(() => {
+    if (!unitEffectReady.current) {
+      unitEffectReady.current = true;
+      return;
+    }
     if (!enabled) return;
+    localStorage.removeItem(SNAPSHOT_KEY);
     doFetch(true);
   }, [tempUnit, enabled, doFetch]);
+
+  const refresh = useCallback(() => {
+    localStorage.removeItem(SNAPSHOT_KEY);
+    return doFetch(false);
+  }, [doFetch]);
 
   return {
     temperature,
@@ -485,5 +686,7 @@ export function useWeather(enabled: boolean) {
     weatherIcon,
     cityName,
     tempUnit,
+    snapshot,
+    refresh,
   };
 }

@@ -191,6 +191,8 @@ function SettingsApp() {
               resetCcLayout={settings.resetCcLayout}
               weatherEnabled={settings.weatherEnabled}
               toggleWeather={settings.toggleWeather}
+              weatherBlockEnabled={settings.weatherBlockEnabled}
+              toggleWeatherBlock={settings.toggleWeatherBlock}
               tempUnitFahrenheit={settings.tempUnitFahrenheit}
               toggleTempUnit={settings.toggleTempUnit}
               cityName={settings.cityName}
