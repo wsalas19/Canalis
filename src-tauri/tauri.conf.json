@@ -1,8 +1,8 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "nectar",
-  "version": "1.7.2",
-  "identifier": "com.kua8.nectar",
+  "productName": "Canalis",
+  "version": "1.8.0",
+  "identifier": "io.github.wsalas19.canalis",
   "build": {
     "beforeDevCommand": "bun run dev",
     "devUrl": "http://localhost:1420",
@@ -13,7 +13,7 @@
     "windows": [
       {
         "label": "main",
-        "title": "nectar",
+        "title": "Canalis",
         "width": 1920,
         "height": 420,
         "x": 0,
@@ -34,7 +34,7 @@
       },
       {
         "label": "settings",
-        "title": "Settings",
+        "title": "Canalis Settings",
         "url": "settings.html",
         "width": 760,
         "height": 620,
@@ -56,7 +56,7 @@
       },
       {
         "label": "calendar",
-        "title": "Calendar",
+        "title": "Canalis Calendar",
         "url": "calendar.html",
         "width": 880,
         "height": 600,
@@ -99,7 +99,7 @@
       },
       {
         "label": "dock",
-        "title": "Nectar Dock",
+        "title": "Canalis Dock",
         "url": "dock.html",
         "width": 1920,
         "height": 600,
@@ -120,7 +120,7 @@
       }
     ],
     "security": {
-      "csp": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: blob: http://nectar-icon.localhost; font-src 'self' data: https://fonts.gstatic.com; connect-src 'self' ipc: http://ipc.localhost https://api.open-meteo.com https://geocoding-api.open-meteo.com https://ipapi.co https://freeipapi.com https://ipwho.is https://get.geojs.io"
+      "csp": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: blob: http://canalis-icon.localhost; font-src 'self' data: https://fonts.gstatic.com; connect-src 'self' ipc: http://ipc.localhost https://api.open-meteo.com https://geocoding-api.open-meteo.com https://ipapi.co https://freeipapi.com https://ipwho.is https://get.geojs.io"
     }
   },
   "bundle": {
@@ -152,9 +152,9 @@
         "installMode": "quiet"
       },
       "endpoints": [
-        "https://github.com/kua8/Nectar/releases/latest/download/latest.json"
+        "https://github.com/wsalas19/Canalis/releases/latest/download/latest.json"
       ],
-      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDY2QTJCRjEzRjIxNkI5NkEKUldScXVSYnlFNytpWm0ycmxwTVVUeDdxMjVPdHBzNGJHcm1LT2RFVWVNOC9zd3Y1bHpLM1BwWFIK"
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEQxQzlFNDQyQTc1NTM1MjgKUldRb05WV25RdVRKMFJpRUFnK1NVWFVUaGdMRFBrQjVjVDVuRit6b21HRHNhNjA3NzJxdVdyVysK"
     }
   }
 }

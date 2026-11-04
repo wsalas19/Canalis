@@ -1,40 +1,37 @@
 <div align="center">
 
-<img src="docs/logo.png" width="128" alt="Nectar logo" />
+<img src="docs/logo.png" width="128" alt="Canalis logo" />
 
 <br />
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/wordmark-dark.png" />
-  <img src="docs/wordmark-light.png" height="44" alt="Nectar" />
+  <img src="docs/wordmark-light.png" height="44" alt="Canalis" />
 </picture>
 
 <p><strong>A notch and a dock for Windows.<br />Physics-animated, reactive, and built to replace your taskbar.</strong></p>
 
-[![Latest release](https://shieldcn.dev/badge/release-v1.7.1.svg?logo=lu:Tag)](https://github.com/kua8/Nectar/releases/latest)
-[![Downloads](https://badges.kua8.lol/downloads.svg)](https://github.com/kua8/Nectar/releases)
-[![License](https://shieldcn.dev/github/license/kua8/Nectar.svg?logo=lu:Scale)](LICENSE)
-[![Platform](https://shieldcn.dev/badge/platform-Windows.svg?logo=ri:FaWindows)](https://www.microsoft.com/windows)
+[![Latest release](https://img.shields.io/github/v/release/wsalas19/Canalis?label=release&logo=github)](https://github.com/wsalas19/Canalis/releases/latest)
+[![Downloads](https://img.shields.io/github/downloads/wsalas19/Canalis/total?logo=github)](https://github.com/wsalas19/Canalis/releases)
+[![License](https://img.shields.io/github/license/wsalas19/Canalis?logo=opensourceinitiative)](LICENSE)
+[![Platform](https://img.shields.io/badge/platform-Windows-0078D4?logo=windows)](https://www.microsoft.com/windows)
+[![Based on Nectar](https://img.shields.io/badge/based%20on-Nectar%20by%20kua8-2A9D8F)](https://github.com/kua8/Nectar)
 
-[**Download**](https://github.com/kua8/Nectar/releases/latest) &nbsp;·&nbsp; [Features](#features) &nbsp;·&nbsp; [Install](#install) &nbsp;·&nbsp; [Settings](SETTINGS.md) &nbsp;·&nbsp; [Report a bug](https://github.com/kua8/Nectar/issues/new/choose)
+[**Download**](https://github.com/wsalas19/Canalis/releases/latest) &nbsp;·&nbsp; [Features](#features) &nbsp;·&nbsp; [Install](#install) &nbsp;·&nbsp; [Settings](SETTINGS.md) &nbsp;·&nbsp; [Report a bug](https://github.com/wsalas19/Canalis/issues/new/choose)
 
 <br />
 
-<img src="docs/screenshots/desktop.webp" width="860" alt="Nectar's notch and dock on a Windows desktop" />
+<img src="docs/screenshots/desktop.webp" width="860" alt="The shared notch and dock layout on a Windows desktop" />
 
 <br /><br />
 
-<a href="https://nectar.kua8.lol/trailer/">
-  <img src="docs/trailer-preview.svg" width="860" alt="Watch Nectar in action — 40-second trailer" />
-</a>
-
-[**▶ Watch Nectar in action**](https://nectar.kua8.lol/trailer/) · 40 seconds
+<sub>Screenshots show the shared Nectar/Canalis layout. New Canalis captures will replace them after the first build.</sub>
 
 </div>
 
 <br />
 
-> **Disclaimer:** I'm a solo dev and I really DID NOT expect this sudden traction for Nectar. I really appreciate the recent support, and I'm trying my best to release fixes as quickly as possible to keep you all happy. But fixing one issue often causes another one. So moving forward I'll do weekly releases with stable builds, plus a pre-release for smaller fixes, and a toggle to decide which version of Nectar you run. This gives me time to search through all the bugs, find the most critical ones, and also have a private life. Thank you for understanding.
+> **About Canalis:** Canalis is a community fork of [Nectar](https://github.com/kua8/Nectar) by kua8, which is itself a fork of [Bloom](https://github.com/SehajveerSingh2005/bloom) by Sehajveer Singh. The original architecture and most of the code are theirs; Canalis adds its own identity, update channel, and the changes listed in [FORK.md](FORK.md). Canalis is not affiliated with or endorsed by the upstream maintainers.
 
 ## Features
 
@@ -50,8 +47,8 @@
 <div align="center">
 <table>
   <tr>
-    <td align="center"><img src="docs/screenshots/island.png" height="130" alt="The Nectar notch" /></td>
-    <td align="center"><img src="docs/screenshots/dock.png" height="130" alt="The Nectar dock" /></td>
+    <td align="center"><img src="docs/screenshots/island.png" height="130" alt="The notch" /></td>
+    <td align="center"><img src="docs/screenshots/dock.png" height="130" alt="The dock" /></td>
   </tr>
   <tr>
     <td align="center"><sub>The notch</sub></td>
@@ -62,21 +59,21 @@
 
 ## Install
 
-1. Download the installer from the [latest release](https://github.com/kua8/Nectar/releases/latest).
+1. Download the installer from the [latest release](https://github.com/wsalas19/Canalis/releases/latest).
 2. Choose **Just me** or **All users**. An all-users install asks for administrator permission once.
-3. Nectar starts with a short splash, then the notch and dock appear together.
+3. Canalis starts with a short splash, then the notch and dock appear together.
 
-Nectar updates itself: a green dot on the notch means an update is ready, and **Auto Update** in **Settings › About** installs it for you. Turn on **Get pre-releases** there to receive early builds before the weekly release. **Uninstall** from Windows Settings › Apps or from **Settings › About**, either puts your taskbar back.
+Canalis updates itself: a green dot on the notch means an update is ready, and **Auto Update** in **Settings › About** installs it for you. Turn on **Get pre-releases** there to receive early builds. **Uninstall** from Windows Settings › Apps or from **Settings › About**; either puts your taskbar back.
 
 <details>
 <summary>Verify your download</summary>
 
 <br />
 
-Only download Nectar from the [releases page](https://github.com/kua8/Nectar/releases) of this repository. Each release has a `SHA256SUMS.txt`. Compare the output of this command with the matching line:
+Only download Canalis from the [releases page](https://github.com/wsalas19/Canalis/releases) of this repository. Each release has a `SHA256SUMS.txt`. Compare the output of this command with the matching line:
 
 ```powershell
-Get-FileHash .\Nectar-Setup-<version>.exe -Algorithm SHA256
+Get-FileHash .\Canalis-Setup-<version>.exe -Algorithm SHA256
 ```
 
 </details>
@@ -112,7 +109,7 @@ In Smart and Peek both stay hidden, and click-through, while a fullscreen app is
 
 <br />
 
-Nectar hides the dock and notch over a fullscreen window that covers the whole monitor, in Smart and Peek. Fixed mode stays visible by design. If something still appears, open an issue with the game and its display mode (fullscreen, borderless or windowed).
+Canalis hides the dock and notch over a fullscreen window that covers the whole monitor, in Smart and Peek. Fixed mode stays visible by design. If something still appears, open an issue with the game and its display mode (fullscreen, borderless or windowed).
 
 </details>
 
@@ -121,12 +118,12 @@ Nectar hides the dock and notch over a fullscreen window that covers the whole m
 
 <br />
 
-Start Nectar again, it restores the taskbar on launch even after a crash. Uninstalling from Windows Settings › Apps or from **Settings › About** brings it back too.
+Start Canalis again; it restores the taskbar on launch even after a crash. Uninstalling from Windows Settings › Apps or from **Settings › About** brings it back too.
 
 </details>
 
 <details>
-<summary><b>Nectar uses a lot of memory</b></summary>
+<summary><b>Canalis uses a lot of memory</b></summary>
 
 <br />
 
@@ -148,7 +145,7 @@ External monitors are controlled over DDC/CI. Turn DDC/CI on in the monitor's ow
 
 <br />
 
-Open **Settings › About › Copy Diagnostics** and paste the result into a [bug report](https://github.com/kua8/Nectar/issues/new/choose). It includes your versions, monitors and recent log.
+Open **Settings › About › Copy Diagnostics** and paste the result into a [bug report](https://github.com/wsalas19/Canalis/issues/new/choose). It includes your versions, monitors and recent log.
 
 </details>
 
@@ -157,8 +154,8 @@ Open **Settings › About › Copy Diagnostics** and paste the result into a [bu
 You need [Rust](https://rustup.rs/) and [Bun](https://bun.sh/) on Windows.
 
 ```bash
-git clone https://github.com/kua8/Nectar.git
-cd Nectar
+git clone https://github.com/wsalas19/Canalis.git
+cd Canalis
 bun install
 bun run tauri dev
 ```
@@ -175,7 +172,7 @@ These are ideas under consideration, not promises.
 - [x] Stable and pre-release update channels
 - [x] Multiple media sessions, Task Manager in the dock menu, show desktop corner
 
-See the [open issues](https://github.com/kua8/Nectar/issues) for requests and known bugs.
+See the [open issues](https://github.com/wsalas19/Canalis/issues) for requests and known bugs.
 
 ## Built with
 
@@ -185,16 +182,15 @@ See the [open issues](https://github.com/kua8/Nectar/issues) for requests and kn
 [![TypeScript](https://img.shields.io/badge/TypeScript-3178C6?style=for-the-badge&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
 [![Vite](https://img.shields.io/badge/Vite-646CFF?style=for-the-badge&logo=vite&logoColor=white)](https://vitejs.dev/)
 
-## Support
-
-Nectar is free and open source. If it makes your desktop nicer, you can support its development.
-
-[![Buy Me a Coffee](https://img.shields.io/badge/Buy%20Me%20a%20Coffee-FFDD00?style=for-the-badge&logo=buymeacoffee&logoColor=black)](https://buymeacoffee.com/kua8)
-
 ## License
 
-Nectar is open source under the [GPLv3](LICENSE).
+Canalis is open source under the [GPLv3](LICENSE).
 
 ## Credits
 
-Nectar began as a fork of [Bloom](https://github.com/SehajveerSingh2005/bloom) by Sehajveer Singh, and the original concept and the codebase it grew from are theirs. Nectar has since been rebuilt and is maintained independently, with its own features, fixes and direction. Thanks to everyone listed on the [contributors page](https://github.com/kua8/Nectar/graphs/contributors).
+- **[Nectar](https://github.com/kua8/Nectar)** — the upstream project: architecture, nearly all application code, and the original documentation.
+- **[Bloom](https://github.com/SehajveerSingh2005/bloom)** — the origin of the Nectar codebase.
+- **[Tauri](https://tauri.app)**, **[React](https://react.dev)**, **[framer-motion](https://motion.dev)**, **[lucide](https://lucide.dev)**, **[Inter](https://rsms.me/inter/)** — the stack this runs on.
+- The Canalis identity, independent update channel, and fork-specific changes are maintained by [wsalas19](https://github.com/wsalas19).
+
+See [NOTICE.md](NOTICE.md) for the full attribution and [FORK.md](FORK.md) for the maintenance and release process.

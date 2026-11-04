@@ -1,21 +1,21 @@
-# Contributing to Nectar
+# Contributing to Canalis
 
 Thanks for wanting to help. Bug reports, ideas, translations and pull requests are all welcome.
 
 ## Before you start
 
-- **Found a bug?** Open an [issue](https://github.com/kua8/Nectar/issues/new/choose) with the bug form. The version, your Windows build, and **Copy Diagnostics** from Settings > About make a big difference.
-- **Have a question or an idea?** Start a [discussion](https://github.com/kua8/Nectar/discussions) first, or a feature request if it is concrete.
+- **Found a bug?** Open an [issue](https://github.com/wsalas19/Canalis/issues/new/choose) with the bug form. The version, your Windows build, and **Copy Diagnostics** from Settings > About make a big difference.
+- **Have a question or an idea?** Start a [discussion](https://github.com/wsalas19/Canalis/discussions) first, or a feature request if it is concrete.
 - **Want to send a pull request for a new feature?** Please open an issue or discussion first so we can agree on it before you spend time on it. Bug fixes, translations and documentation fixes can go straight to a pull request.
-- **Security problem?** Do not open an issue. Report it privately in the [Security tab](https://github.com/kua8/Nectar?tab=security-ov-file#).
+- **Security problem?** Do not open an issue. Report it privately in the [Security tab](https://github.com/wsalas19/Canalis/security/policy).
 
 ## Setting up
 
 You need [Rust](https://rustup.rs/) and [Bun](https://bun.sh/), on Windows.
 
 ```bash
-git clone https://github.com/kua8/Nectar.git
-cd Nectar
+git clone https://github.com/wsalas19/Canalis.git
+cd Canalis
 bun install
 bun run tauri dev
 ```
@@ -45,4 +45,4 @@ Translations live in `src/locales/<code>.json`. To add a language, add the file,
 
 ## License
 
-Nectar is licensed under the [GPLv3](LICENSE). By sending a pull request you agree that your contribution is released under the same license. Nectar is a fork of [Bloom](https://github.com/SehajveerSingh2005/bloom) by Sehajveer Singh, and some code is adapted from it.
+Canalis is licensed under the [GPLv3](LICENSE). By sending a pull request you agree that your contribution is released under the same license. Canalis is a fork of [Nectar](https://github.com/kua8/Nectar), which is a fork of [Bloom](https://github.com/SehajveerSingh2005/bloom) by Sehajveer Singh, and some code is adapted from it.

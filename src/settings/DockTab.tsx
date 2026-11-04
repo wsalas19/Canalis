@@ -11,7 +11,7 @@ import { InlineError } from "../components/InlineError";
 import { useT } from "../i18n";
 
 const START_ICON_PRESETS = [
-  { key: "default", src: "/nectar.png", label: "Nectar" },
+  { key: "default", src: "/canalis.png", label: "Canalis" },
   { key: "windows", src: "/windows.png", label: "Windows" },
 ];
 

@@ -610,7 +610,7 @@ pub async fn open_app(app: AppHandle, app_name: String, args: Option<String>) ->
         .map_err(|e| e.to_string())?;
     }
 
-    if app_name == "nectar-settings" {
+    if app_name == "canalis-settings" {
         open_settings_window(app);
         return Ok(());
     }
@@ -1071,7 +1071,7 @@ fn get_cache_key(path: &str, name: Option<&str>) -> String {
 
 // Icons are content-addressed on disk and fetched through this origin so the
 // webview never receives base64 through the IPC bridge.
-const ICON_ORIGIN: &str = "http://nectar-icon.localhost";
+const ICON_ORIGIN: &str = "http://canalis-icon.localhost";
 
 fn icon_id(key: &str) -> String {
     let mut hash: u64 = 0xcbf2_9ce4_8422_2325;
@@ -1523,7 +1523,7 @@ async fn get_app_icon_data(app: AppHandle, path: String, name: Option<String>, h
     let cache_path = cache_dir.join("icons_cache.json");
     let cache_key = get_cache_key(&path, name.as_deref());
 
-    if path == "nectar-settings" {
+    if path == "canalis-settings" {
         if let Some(icon) = app.default_window_icon() {
             if let Some(rgba) = image::RgbaImage::from_raw(icon.width(), icon.height(), icon.rgba().to_vec()) {
                 let mut out = Vec::new();
@@ -1855,7 +1855,7 @@ pub async fn load_pinned_apps(app: AppHandle) -> Vec<AppInfo> {
         AppInfo { name: "File Explorer".into(), path: "C:\\Windows\\explorer.exe".into(), icon: None, is_running: false, hwnd: None, executable: Some("explorer.exe".into()), all_hwnds: None, args: None },
         AppInfo { name: "Microsoft Edge".into(), path: "msedge".into(), icon: None, is_running: false, hwnd: None, executable: Some("msedge.exe".into()), all_hwnds: None, args: None },
         AppInfo { name: "Notepad".into(), path: "notepad.exe".into(), icon: None, is_running: false, hwnd: None, executable: Some("notepad.exe".into()), all_hwnds: None, args: None },
-        AppInfo { name: "Settings".into(), path: "nectar-settings".into(), icon: None, is_running: false, hwnd: None, executable: None, all_hwnds: None, args: None },
+        AppInfo { name: "Settings".into(), path: "canalis-settings".into(), icon: None, is_running: false, hwnd: None, executable: None, all_hwnds: None, args: None },
     ]
 }
 
@@ -2669,7 +2669,7 @@ pub async fn quit_nectar(handle: AppHandle) {
 fn registered_uninstaller() -> Option<std::path::PathBuf> {
     use std::os::windows::process::CommandExt;
     for root in ["HKCU", "HKLM"] {
-        let key = format!(r"{}\Software\Microsoft\Windows\CurrentVersion\Uninstall\Nectar", root);
+        let key = format!(r"{}\Software\Microsoft\Windows\CurrentVersion\Uninstall\Canalis", root);
         let Ok(out) = std::process::Command::new("reg")
             .args(["query", &key, "/v", "UninstallString"])
             .creation_flags(0x0800_0000)
@@ -2700,7 +2700,7 @@ pub async fn uninstall_nectar(handle: AppHandle) -> Result<(), String> {
 
     if !uninstaller.exists() {
         uninstaller = registered_uninstaller().ok_or_else(|| {
-            "This copy of Nectar isn't an installed one (it's a portable or development build), so there's nothing to uninstall. Run it from its install folder, or use Windows Settings > Apps.".to_string()
+            "This copy of Canalis isn't an installed one (it's a portable or development build), so there's nothing to uninstall. Run it from its install folder, or use Windows Settings > Apps.".to_string()
         })?;
     }
 
@@ -3431,7 +3431,7 @@ const PROTECTED_PROCESS_NAMES: &[&str] = &[
     "smss.exe",
     "explorer.exe",
     "dwm.exe",
-    "nectar.exe",
+    "canalis.exe",
 ];
 
 #[tauri::command]
@@ -3679,8 +3679,8 @@ pub async fn export_settings_dialog(app: AppHandle) -> Result<bool, String> {
     let file_path = app
         .dialog()
         .file()
-        .set_title("Export Nectar Settings")
-        .set_file_name("nectar-settings.json")
+        .set_title("Export Canalis Settings")
+        .set_file_name("canalis-settings.json")
         .add_filter("JSON", &["json"])
         .blocking_save_file();
 
@@ -3701,7 +3701,7 @@ pub async fn import_settings_dialog(app: AppHandle) -> Result<bool, String> {
     let file_path = app
         .dialog()
         .file()
-        .set_title("Import Nectar Settings")
+        .set_title("Import Canalis Settings")
         .add_filter("JSON", &["json"])
         .blocking_pick_file();
 
@@ -4099,7 +4099,7 @@ pub fn shelf_text_file(text: String) -> Option<String> {
         .map(|c| if c.is_alphanumeric() || c == ' ' || c == '-' || c == '_' { c } else { '_' })
         .collect();
     let name = if name.trim().is_empty() { "note".to_string() } else { name.trim().to_string() };
-    let dir = std::env::temp_dir().join("nectar-shelf");
+    let dir = std::env::temp_dir().join("canalis-shelf");
     std::fs::create_dir_all(&dir).ok()?;
     let path = dir.join(format!("{name}.txt"));
     std::fs::write(&path, text).ok()?;

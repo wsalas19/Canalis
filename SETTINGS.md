@@ -1,10 +1,10 @@
-# Nectar Settings Reference
+# Canalis Settings Reference
 
-All settings are stored in `settings.json` in the app config directory (`%APPDATA%/com.kua8.nectar/`, derived from the Tauri app identifier). The file is a flat JSON object with `nectar-` prefixed keys. Nectar watches this file for external changes and applies them in real-time.
+All settings are stored in `settings.json` in the app config directory (`%APPDATA%/io.github.wsalas19.canalis/`, derived from the Tauri app identifier). The file is a flat JSON object with `nectar-` prefixed keys. Canalis watches this file for external changes and applies them in real-time.
 
 ## Quick Start
 
-Edit `settings.json` with any text editor while Nectar is running. Changes are applied immediately — no restart required.
+Edit `settings.json` with any text editor while Canalis is running. Changes are applied immediately — no restart required.
 
 ```json
 {
@@ -21,18 +21,18 @@ Edit `settings.json` with any text editor while Nectar is running. Changes are a
 
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
-| `nectar-dock-enabled` | `"true"` / `"false"` | `"true"` | Show or hide the Nectar Dock (taskbar replacement). |
+| `nectar-dock-enabled` | `"true"` / `"false"` | `"true"` | Show or hide the Canalis Dock (taskbar replacement). |
 | `nectar-dock-mode` | `"fixed"` / `"smart"` / `"peek"` | `"smart"` | Dock visibility behavior. **fixed** = always visible as AppBar. **smart** = auto-hide when overlapped by another window or a fullscreen app. **peek** = hidden until cursor approaches bottom edge. Smart/peek still reveal on hover and are clickable even over a fullscreen app — only a thin pre-emptive strip right at the screen edge stays click-through, so other apps' own edge-hugging UI (e.g. a Snipping Tool selection) is never intercepted. |
 | `nectar-dock-preview-enabled` | `"true"` / `"false"` | `"true"` | Show window thumbnail previews when hovering dock icons. |
 | `nectar-dock-search-enabled` | `"true"` / `"false"` | `"true"` | Show a search icon next to Start that opens Windows Search (Win+S). |
-| `nectar-dock-calendar-enabled` | `"true"` / `"false"` | `"true"` | Show a calendar icon next to the search icon that opens the Calendar window. The Calendar window is also in the dock's Nectar Options menu, the tray menu, and the notch calendar's open button. |
+| `nectar-dock-calendar-enabled` | `"true"` / `"false"` | `"true"` | Show a calendar icon next to the search icon that opens the Calendar window. The Calendar window is also in the dock's Canalis Options menu, the tray menu, and the notch calendar's open button. |
 | `nectar-dock-tray-enabled` | `"true"` / `"false"` | `"true"` | Show a ^ button in the dock that opens the hidden tray icons popup. Hidden in Legacy Mode. |
 | `nectar-dock-taskview-enabled` | `"true"` / `"false"` | `"false"` | Show a Task View button next to the calendar icon (Win+Tab). Hidden in Legacy Mode. |
 | `nectar-dock-show-desktop-corner` | `"true"` / `"false"` | `"false"` | Show a thin bar at the right end of the dock that shows the desktop (Win+D) when clicked, and do the same for a click in the very bottom-right corner of the screen (a 6 px square on the dock's monitor, not while a fullscreen app is in front). |
 | `nectar-dock-recycle-enabled` | `"true"` / `"false"` | `"false"` | Show the Recycle Bin in the dock. Hidden in Legacy Mode. |
 | `nectar-dock-drives` | JSON array, e.g. `["C","D"]` | `[]` | Drive letters to show as dock buttons that open the drive in Explorer. Hidden in Legacy Mode. |
 | `nectar-dock-icon-only` | `"true"` / `"false"` | `"false"` | Minimal icon-only style (no background/padding around icons). |
-| `nectar-start-icon` | `"default"` / `"windows"` / `custom:<data URI>` | `"default"` | Start button icon in the dock: the Nectar logo, the Windows logo, or an uploaded image (`custom:` followed by its data URI). |
+| `nectar-start-icon` | `"default"` / `"windows"` / `custom:<data URI>` | `"default"` | Start button icon in the dock: the Canalis logo, the Windows logo, or an uploaded image (`custom:` followed by its data URI). |
 | `nectar-dock-adaptive` | `"true"` / `"false"` | `"false"` | Fixed dock only. Stretch the dock to full width like a traditional taskbar while a window is maximized, and contract back when it's restored. |
 | `nectar-dock-win-number-enabled` | `"true"` / `"false"` | `"true"` | When the taskbar is replaced, Win+1 through Win+9 activate the matching pinned dock app (focus/minimize if running, launch otherwise) instead of the native taskbar slots. |
 | `nectar-dock-mixed-reorder` | `"true"` / `"false"` | `"false"` | `"false"` = pinned and running icons stay in two separate groups with a divider between them. `"true"` = a single group — any icon, pinned or not, can be dragged anywhere. |
@@ -45,7 +45,7 @@ Edit `settings.json` with any text editor while Nectar is running. Changes are a
 | `nectar-notch-mode` | `"fixed"` / `"smart"` / `"peek"` | `"fixed"` | Notch (top bar) visibility behavior. **fixed** = always visible, never auto-hides (including over fullscreen apps — matches a real hardware notch, which doesn't disappear either). **smart** = hides when overlapped by another window/fullscreen app, reveals on hover. **peek** = hidden until cursor approaches the top edge, a media event, or a notification. Smart/peek reveal and are fully clickable on hover even over a fullscreen app (only a thin strip right at the screen edge stays click-through, so it never steals input meant for another app). Unlike the Dock, the notch never reserves desktop work-area space, so it never leaves a gap above maximized windows' content. |
 | `nectar-notch-timer-progress` | `"true"` / `"false"` | `"true"` | Show an edge progress bar along the bottom of the notch while a timer or Pomodoro session is active. |
 | `nectar-notch-scroll-volume` | `"true"` / `"false"` | `"false"` | Scroll with mouse wheel over the volume, brightness and mixer sliders to adjust them. |
-| `nectar-shelf-persist` | `"true"` / `"false"` | `"false"` | Keep the notch shelf's items after Nectar restarts. The shelf holds files (as links, not copies) and text dropped on the notch; at most 10, newest first. Off clears them when Nectar closes. Files that no longer exist are dropped on start. |
+| `nectar-shelf-persist` | `"true"` / `"false"` | `"false"` | Keep the notch shelf's items after Canalis restarts. The shelf holds files (as links, not copies) and text dropped on the notch; at most 10, newest first. Off clears them when Canalis closes. Files that no longer exist are dropped on start. |
 | `nectar-notch-remember-mode` | `"true"` / `"false"` | `"false"` | When the cursor leaves the notch and comes back, reopen the Control Center or Calendar panel you were on instead of resetting to the default (status or music). |
 | `nectar-panel-control-center-enabled` | `"true"` / `"false"` | `"true"` | Include the Control Center when scrolling through the notch panels. |
 | `nectar-panel-shelf-enabled` | `"true"` / `"false"` | `"true"` | Include the Shelf panel and accept files and text dropped on the notch. |
@@ -63,7 +63,7 @@ The dock and the notch each choose their monitors separately. In Settings this i
 | `nectar-notch-monitor-mode` | `"primary"` / `"all"` / `"specific"` | `"primary"` | Where the notch appears. Same values as the dock. |
 | `nectar-notch-monitor-id` | string | `""` | Windows display name of the monitor to use when the notch mode is `"specific"`. Set automatically when you pick a monitor in Settings. |
 
-If the chosen monitor is unplugged, Nectar falls back to the primary display.
+If the chosen monitor is unplugged, Canalis falls back to the primary display.
 
 With **All Monitors** and more than one display, the **Per-Monitor Behavior** toggle on the Dock and Notch tabs gives each monitor its own Fixed / Smart / Peek. Turning it off goes back to one behavior for all of them.
 
@@ -102,7 +102,7 @@ With **All Monitors** and more than one display, the **Per-Monitor Behavior** to
 
 ### Calendar Sync (links and CalDAV)
 
-Read-only sync of your calendars into the notch calendar. Open Settings › Notch › Calendar Sync (shown while Calendar is on). There are two ways to connect, and you can use both at once. Nectar never writes to a server.
+Read-only sync of your calendars into the notch calendar. Open Settings › Notch › Calendar Sync (shown while Calendar is on). There are two ways to connect, and you can use both at once. Canalis never writes to a server.
 
 - **Calendar links** need no password: paste a Google, iCloud, Outlook, Proton, Nextcloud or any other `.ics` / `webcal://` link. Repeating events, exceptions and time zones are expanded locally.
 - **CalDAV account** (Nextcloud, iCloud, or any CalDAV server) also reads private calendars, using an app password.
@@ -114,9 +114,9 @@ Read-only sync of your calendars into the notch calendar. Open Settings › Notc
 | `nectar-caldav-username` | string | `""` | Account username. |
 | `nectar-caldav-interval` | number string | `"15"` | Minutes between background syncs. Minimum `5`. |
 
-`nectar-caldav-interval` applies to every source, links included. After Nectar restarts or crashes it syncs right away instead of waiting out the interval, and retries a few times if the network isn't back yet.
+`nectar-caldav-interval` applies to every source, links included. After Canalis restarts or crashes it syncs right away instead of waiting out the interval, and retries a few times if the network isn't back yet.
 
-Secrets are **not** in `settings.json`. The CalDAV app password lives in Windows Credential Manager as `Nectar CalDAV`, and each calendar link (which acts like a password, since anyone holding it can read the calendar) lives there as `Nectar Calendar Link`. Everything else is local to the app config directory:
+Secrets are **not** in `settings.json`. The CalDAV app password lives in Windows Credential Manager as `Canalis CalDAV`, and each calendar link (which acts like a password, since anyone holding it can read the calendar) lives there as `Canalis Calendar Link`. Everything else is local to the app config directory:
 
 | File | Contents |
 |------|----------|
@@ -140,9 +140,9 @@ Removing a link or disconnecting the account deletes its stored secret and cache
 
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
-| `nectar-volume-overlay-enabled` | `"true"` / `"false"` | `"true"` | Show Nectar volume HUD when volume changes (replaces native Windows OSD). |
+| `nectar-volume-overlay-enabled` | `"true"` / `"false"` | `"true"` | Show Canalis volume HUD when volume changes (replaces native Windows OSD). |
 | `nectar-volume-edge-enabled` | `"true"` / `"false"` | `"true"` | Trigger volume HUD by hovering the left screen edge. |
-| `nectar-brightness-overlay-enabled` | `"true"` / `"false"` | `"true"` | Show Nectar brightness HUD when brightness changes. |
+| `nectar-brightness-overlay-enabled` | `"true"` / `"false"` | `"true"` | Show Canalis brightness HUD when brightness changes. |
 | `nectar-brightness-edge-enabled` | `"true"` / `"false"` | `"true"` | Trigger brightness HUD by hovering the right screen edge. |
 
 ### Appearance
@@ -193,19 +193,19 @@ Example:
 
 ## Event System
 
-Nectar uses two Tauri events for settings synchronization:
+Canalis uses two Tauri events for settings synchronization:
 
 ### `settings-changed`
 - **Emitted by:** `save_setting` command (frontend or backend)
 - **Payload:** `{ "key": "nectar-...", "value": ... }`
-- **Purpose:** Broadcasts changes made through the Nectar UI to all windows
-- **Key format:** Nectar-prefixed keys as-is (e.g. `"nectar-dock-mode"`)
+- **Purpose:** Broadcasts changes made through the Canalis UI to all windows
+- **Key format:** Canalis-prefixed keys as-is (e.g. `"nectar-dock-mode"`)
 
 ### `settings-external-changed`
 - **Emitted by:** File watcher (detects external edits to `settings.json`)
 - **Payload:** `{ "key": "nectar-...", "value": ... }` or `{ "key": "nectar-...", "value": null }` for removed keys
 - **Purpose:** Broadcasts changes made by external editors (VS Code, notepad, scripts)
-- **Key format:** Nectar-prefixed keys as-is
+- **Key format:** Canalis-prefixed keys as-is
 - **Behavior:** Also syncs values to `localStorage` for instant frontend reads
 
 ### Flow
@@ -227,15 +227,15 @@ UI re-renders with new values
 
 ```powershell
 # PowerShell: switch dock to smart mode
-$json = Get-Content "$env:APPDATA\com.kua8.nectar\settings.json" | ConvertFrom-Json
+$json = Get-Content "$env:APPDATA\io.github.wsalas19.canalis\settings.json" | ConvertFrom-Json
 $json.'nectar-dock-mode' = 'smart'
-$json | ConvertTo-Json | Set-Content "$env:APPDATA\com.kua8.nectar\settings.json"
+$json | ConvertTo-Json | Set-Content "$env:APPDATA\io.github.wsalas19.canalis\settings.json"
 ```
 
 ```python
 # Python: disable dock
 import json, os
-path = os.path.join(os.environ['APPDATA'], 'com.kua8.nectar', 'settings.json')
+path = os.path.join(os.environ['APPDATA'], 'io.github.wsalas19.canalis', 'settings.json')
 with open(path) as f: settings = json.load(f)
 settings['nectar-dock-enabled'] = 'false'
 with open(path, 'w') as f: json.dump(settings, f)

@@ -1,5 +1,5 @@
 name: Uninstall feedback
-description: Tell us why you removed Nectar (opened from the uninstaller)
+description: Tell us why you removed Canalis (opened from the uninstaller)
 title: "Uninstall feedback"
 labels: ["feedback"]
 body:
@@ -20,4 +20,4 @@ body:
   - type: input
     id: version
     attributes:
-      label: Nectar version
+      label: Canalis version

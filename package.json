@@ -1,8 +1,8 @@
 {
-  "name": "nectar",
+  "name": "canalis",
   "private": true,
   "license": "GPL-3.0-only",
-  "version": "1.7.2",
+  "version": "1.8.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
