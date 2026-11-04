@@ -4,7 +4,7 @@ use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 use tauri::{AppHandle, Emitter, Manager};
 use windows::Win32::Foundation::{HWND, LPARAM, WPARAM};
 use windows::core::BOOL;
-use windows::Win32::UI::WindowsAndMessaging::{GetWindowThreadProcessId, IsWindowVisible, GetWindowLongW, GWL_EXSTYLE, WS_EX_TOOLWINDOW, WH_MOUSE_LL, MSLLHOOKSTRUCT, WM_MOUSEMOVE, WM_LBUTTONDOWN, SetWindowsHookExW, CallNextHookEx};
+use windows::Win32::UI::WindowsAndMessaging::{GetWindowThreadProcessId, IsWindowVisible, GetWindowLongW, GWL_EXSTYLE, WS_EX_TOOLWINDOW, WS_EX_APPWINDOW, WH_MOUSE_LL, MSLLHOOKSTRUCT, WM_MOUSEMOVE, WM_LBUTTONDOWN, SetWindowsHookExW, CallNextHookEx};
 use windows::Win32::Graphics::Dwm::{DwmGetWindowAttribute, DWMWA_EXTENDED_FRAME_BOUNDS};
 use windows::Win32::System::Threading::{OpenProcess, QueryFullProcessImageNameW, PROCESS_QUERY_LIMITED_INFORMATION, PROCESS_NAME_WIN32};
 use windows::Win32::Foundation::CloseHandle;
@@ -3338,6 +3338,22 @@ unsafe fn dialog_has_tab_control(hwnd: HWND) -> bool {
     found
 }
 
+/// Mirrors how the Windows taskbar decides which top-level windows get a button.
+/// A window with WS_EX_APPWINDOW is always shown; otherwise WS_EX_TOOLWINDOW windows
+/// are hidden, and owned windows are hidden too (the owner's visibility does not matter).
+/// Explorer property sheets (`#32770` with a tab control) are the exception.
+fn is_taskbar_candidate(ex_style: u32, has_owner: bool, is_explorer_special: bool) -> bool {
+    let is_app = ex_style & WS_EX_APPWINDOW.0 != 0;
+    let is_tool = ex_style & WS_EX_TOOLWINDOW.0 != 0;
+    if !is_app && is_tool {
+        return false;
+    }
+    if !is_app && has_owner && !is_explorer_special {
+        return false;
+    }
+    true
+}
+
 pub unsafe extern "system" fn enum_windows_proc(hwnd: HWND, lparam: LPARAM) -> BOOL {
     let apps = &mut *(lparam.0 as *mut Vec<AppInfo>);
 
@@ -3363,16 +3379,27 @@ pub unsafe extern "system" fn enum_windows_proc(hwnd: HWND, lparam: LPARAM) -> B
             let title = String::from_utf16_lossy(&text[..len as usize]);
             
             let ex_style = GetWindowLongW(hwnd, GWL_EXSTYLE) as u32;
-            
-            // Basic filter for top-level app windows
-            // We include windows without captions if they don't have the ToolWindow style,
-            // as many games and modern apps (like Spotify/Valorant) lack WS_CAPTION.
-            if (ex_style & WS_EX_TOOLWINDOW.0) != 0 {
-                return true.into();
-            }
 
             // Filter out system containers and background stuff
             if title == "Program Manager" || title == "Canalis" || title == "Canalis Dock" {
+                return true.into();
+            }
+
+            let mut class_name = [0u8; 256];
+            let class_len = windows::Win32::UI::WindowsAndMessaging::GetClassNameA(hwnd, &mut class_name);
+            let window_class = std::str::from_utf8(&class_name[..class_len as usize]).unwrap_or("");
+
+            // Explorer folder windows and property sheets (#32770 with a tab control) both count,
+            // so Properties shows under File Explorer.
+            let is_explorer_window = window_class == "CabinetWClass"
+                || window_class == "ExploreWClass"
+                || (window_class == "#32770" && dialog_has_tab_control(hwnd));
+
+            // Match the taskbar: any owner hides a window unless it is an APPWINDOW.
+            let has_owner = windows::Win32::UI::WindowsAndMessaging::GetWindow(hwnd, windows::Win32::UI::WindowsAndMessaging::GW_OWNER)
+                .map(|owner| !owner.0.is_null())
+                .unwrap_or(false);
+            if !is_taskbar_candidate(ex_style, has_owner, is_explorer_window) {
                 return true.into();
             }
 
@@ -3385,24 +3412,6 @@ pub unsafe extern "system" fn enum_windows_proc(hwnd: HWND, lparam: LPARAM) -> B
                 if QueryFullProcessImageNameW(process_handle, PROCESS_NAME_WIN32, windows::core::PWSTR(path_buf.as_mut_ptr()), &mut path_len).is_ok() {
                     let path = String::from_utf16_lossy(&path_buf[..path_len as usize]);
                     let lowercase_path = path.to_lowercase();
-                    
-                    let mut class_name = [0u8; 256];
-                    let class_len = windows::Win32::UI::WindowsAndMessaging::GetClassNameA(hwnd, &mut class_name);
-                    let window_class = std::str::from_utf8(&class_name[..class_len as usize]).unwrap_or("");
-
-                    // Explorer folder windows and property sheets (#32770 with a tab control) both count,
-                    // so Properties shows under File Explorer.
-                    let is_explorer_window = window_class == "CabinetWClass"
-                        || window_class == "ExploreWClass"
-                        || (window_class == "#32770" && dialog_has_tab_control(hwnd));
-
-                    let has_visible_owner = windows::Win32::UI::WindowsAndMessaging::GetWindow(hwnd, windows::Win32::UI::WindowsAndMessaging::GW_OWNER)
-                        .map(|owner| !owner.0.is_null() && IsWindowVisible(owner).as_bool())
-                        .unwrap_or(false);
-                    if has_visible_owner && !is_explorer_window {
-                        let _ = CloseHandle(process_handle);
-                        return true.into();
-                    }
 
                     if (lowercase_path.contains("canalis.exe") && title != "Canalis Settings") ||
                        lowercase_path.contains("conhost.exe") ||
@@ -3963,7 +3972,40 @@ fn recover_from_webview_failure(handle: &AppHandle) {
 
 #[cfg(test)]
 mod tests {
-    use super::{dock_edge_hover_allowed, is_helper_name, is_launchable_entry, win_number_index};
+    use super::{dock_edge_hover_allowed, is_helper_name, is_launchable_entry, is_taskbar_candidate, win_number_index};
+
+    const APPWINDOW: u32 = 0x0004_0000;
+    const TOOLWINDOW: u32 = 0x0000_0080;
+
+    #[test]
+    fn normal_unowned_window_is_a_taskbar_candidate() {
+        assert!(is_taskbar_candidate(0, false, false));
+    }
+
+    #[test]
+    fn toolwindow_unowned_is_not_a_taskbar_candidate() {
+        assert!(!is_taskbar_candidate(TOOLWINDOW, false, false));
+    }
+
+    #[test]
+    fn toolwindow_with_appwindow_is_a_taskbar_candidate() {
+        assert!(is_taskbar_candidate(TOOLWINDOW | APPWINDOW, false, false));
+    }
+
+    #[test]
+    fn owned_non_appwindow_is_not_a_taskbar_candidate() {
+        assert!(!is_taskbar_candidate(0, true, false));
+    }
+
+    #[test]
+    fn owned_with_appwindow_is_a_taskbar_candidate() {
+        assert!(is_taskbar_candidate(APPWINDOW, true, false));
+    }
+
+    #[test]
+    fn explorer_property_sheet_with_owner_is_a_taskbar_candidate() {
+        assert!(is_taskbar_candidate(0, true, true));
+    }
 
     #[test]
     fn fullscreen_dock_does_not_reveal_on_edge_or_hover() {

@@ -1074,9 +1074,16 @@ function AppNotch() {
   // Window height is now kept constant to prevent rendering layout lag and sharp corners
 
   const wheelAccumRef = useRef(0);
+  const wheelConsumedRef = useRef(false);
   const wheelIdleTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const WHEEL_STEP_THRESHOLD = 60;
-  const WHEEL_IDLE_RESET_MS = 180;
+  const WHEEL_STEP_THRESHOLD = 100;
+  const WHEEL_GESTURE_IDLE_MS = 260;
+
+  useEffect(() => {
+    return () => {
+      if (wheelIdleTimeoutRef.current) clearTimeout(wheelIdleTimeoutRef.current);
+    };
+  }, []);
 
   // Music shifts position based on playing state:
   // Playing: command-center → music → status → calendar (active, near command-center)
@@ -1111,28 +1118,52 @@ function AppNotch() {
 
     if (!isHovered) return;
 
-    // Use absolute values to detect horizontal swipe gestures on trackpad
-    const delta = Math.abs(e.deltaX) > Math.abs(e.deltaY) ? e.deltaX : e.deltaY;
-    if (Math.abs(delta) < 2) return; // Ignore near-zero noise
+    // Normalize deltaMode so thresholds are consistent across devices
+    const modeScale = e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? 100 : 1;
+    const rawDelta = (Math.abs(e.deltaX) > Math.abs(e.deltaY) ? e.deltaX : e.deltaY) * modeScale;
+    if (Math.abs(rawDelta) < 2) return; // Ignore near-zero noise
 
-    wheelAccumRef.current += delta;
     if (wheelIdleTimeoutRef.current) clearTimeout(wheelIdleTimeoutRef.current);
-    wheelIdleTimeoutRef.current = setTimeout(() => { wheelAccumRef.current = 0; }, WHEEL_IDLE_RESET_MS);
+    wheelIdleTimeoutRef.current = setTimeout(() => {
+      wheelAccumRef.current = 0;
+      wheelConsumedRef.current = false;
+    }, WHEEL_GESTURE_IDLE_MS);
 
+    // One mode per gesture: ignore further events until the gesture goes idle
+    if (wheelConsumedRef.current) return;
+
+    const sign = rawDelta > 0 ? 1 : -1;
+    // Direction change starts a fresh accumulation
+    if (wheelAccumRef.current !== 0 && Math.sign(wheelAccumRef.current) !== sign) {
+      wheelAccumRef.current = 0;
+    }
+
+    wheelAccumRef.current += rawDelta;
     if (Math.abs(wheelAccumRef.current) < WHEEL_STEP_THRESHOLD) return;
-    const direction = wheelAccumRef.current > 0 ? 1 : -1;
-    wheelAccumRef.current = 0;
 
+    const direction = wheelAccumRef.current > 0 ? 1 : -1;
     const availableModes = availableNotchModes();
 
-    if (nectarMode === 'tour') return;
+    if (nectarMode === 'tour') {
+      wheelAccumRef.current = 0;
+      wheelConsumedRef.current = true;
+      return;
+    }
     const currentIndex = availableModes.indexOf(nectarMode);
     if (currentIndex === -1) return;
 
     const nextIndex = (currentIndex + direction + availableModes.length) % availableModes.length;
     const nextMode = availableModes[nextIndex];
+    if (nextMode === nectarMode) {
+      wheelAccumRef.current = 0;
+      wheelConsumedRef.current = true;
+      return;
+    }
+
     manualMusicRef.current = nextMode === 'music';
     setNectarMode(nextMode);
+    wheelAccumRef.current = 0;
+    wheelConsumedRef.current = true;
   };
 
 

@@ -1,7 +1,8 @@
 
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Mutex;
-use windows::Win32::Foundation::{HWND, POINT, RECT};
+use windows::Win32::Foundation::{HWND, LPARAM, POINT, RECT};
+use windows::core::BOOL;
 use windows::Win32::Graphics::Gdi::{GetMonitorInfoW, MonitorFromPoint, MONITORINFO, MONITOR_DEFAULTTONEAREST};
 use windows::Win32::System::Com::{CoCreateInstance, CoInitializeEx, CLSCTX_INPROC_SERVER, COINIT_MULTITHREADED};
 use windows::Win32::UI::Accessibility::{
@@ -9,8 +10,8 @@ use windows::Win32::UI::Accessibility::{
     UIA_InvokePatternId,
 };
 use windows::Win32::UI::WindowsAndMessaging::{
-    FindWindowA, GetAncestor, GetClassNameA, GetCursorPos, GetForegroundWindow, GetWindowLongA, GetWindowRect, GetWindowThreadProcessId, IsWindowVisible, SetForegroundWindow,
-    SetLayeredWindowAttributes, SetWindowLongA, SetWindowPos, ShowWindow, GA_ROOT, GWL_EXSTYLE, HWND_TOPMOST, LWA_ALPHA,
+    FindWindowA, GetAncestor, GetClassNameA, GetCursorPos, GetForegroundWindow, GetWindow, GetWindowLongA, GetWindowRect, GetWindowThreadProcessId, IsWindowVisible, SetForegroundWindow,
+    SetLayeredWindowAttributes, SetWindowLongA, SetWindowPos, ShowWindow, EnumWindows, GA_ROOT, GWL_EXSTYLE, GW_OWNER, HWND_TOPMOST, LWA_ALPHA,
     SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOSIZE, SWP_SHOWWINDOW, SW_HIDE, SW_SHOWNA, WS_EX_LAYERED, WS_EX_TRANSPARENT,
 };
 use windows::core::Interface;
@@ -101,6 +102,51 @@ fn class_name(hwnd: HWND) -> String {
     let mut buf = [0u8; 64];
     let len = unsafe { GetClassNameA(hwnd, &mut buf) }.max(0) as usize;
     String::from_utf8_lossy(&buf[..len]).into_owned()
+}
+
+struct TooltipScan {
+    tray_pid: u32,
+    hidden: u32,
+}
+
+unsafe extern "system" fn hide_tooltip_proc(hwnd: HWND, lparam: LPARAM) -> BOOL {
+    let scan = &mut *(lparam.0 as *mut TooltipScan);
+    if !IsWindowVisible(hwnd).as_bool() {
+        return BOOL(1);
+    }
+    let class = class_name(hwnd);
+    if class != "tooltips_class32" {
+        return BOOL(1);
+    }
+    let owner = GetWindow(hwnd, GW_OWNER).unwrap_or_default();
+    let root = if owner.0.is_null() { owner } else { GetAncestor(owner, GA_ROOT) };
+    let root = if root.0.is_null() { owner } else { root };
+    let owner_is_tray = matches!(class_name(root).as_str(), "Shell_TrayWnd" | "Shell_SecondaryTrayWnd");
+    let mut pid = 0u32;
+    GetWindowThreadProcessId(hwnd, Some(&mut pid));
+    // Bare tooltips created on the taskbar thread have no owner, so match that too.
+    if owner_is_tray || (scan.tray_pid != 0 && pid == scan.tray_pid) {
+        let _ = ShowWindow(hwnd, SW_HIDE);
+        scan.hidden += 1;
+    }
+    BOOL(1)
+}
+
+fn hide_tray_tooltips() {
+    let tray_pid = find_window(c"Shell_TrayWnd")
+        .map(|tray| {
+            let mut pid = 0u32;
+            unsafe { GetWindowThreadProcessId(tray, Some(&mut pid)) };
+            pid
+        })
+        .unwrap_or(0);
+    let mut scan = TooltipScan { tray_pid, hidden: 0 };
+    unsafe {
+        let _ = EnumWindows(Some(hide_tooltip_proc), LPARAM(&mut scan as *mut TooltipScan as isize));
+    }
+    if scan.hidden > 0 {
+        crate::diagnostics::log(&format!("tray: hid {} tray tooltip window(s)", scan.hidden));
+    }
 }
 
 fn taskbar_has_focus() -> bool {
@@ -212,6 +258,7 @@ pub fn open_native_tray(anchor: Option<(i32, i32)>) {
         } else {
             unsafe { let _ = ShowWindow(flyout, SW_HIDE); }
         }
+        hide_tray_tooltips();
         FLYOUT_OPEN.store(false, Ordering::SeqCst);
         return;
     }
@@ -292,6 +339,7 @@ pub fn open_native_tray(anchor: Option<(i32, i32)>) {
             std::thread::sleep(std::time::Duration::from_millis(150));
         }
         FLYOUT_OPEN.store(false, Ordering::SeqCst);
+        hide_tray_tooltips();
     }
 
     if hidden {
@@ -304,6 +352,7 @@ pub fn open_native_tray(anchor: Option<(i32, i32)>) {
             crate::state::NATIVE_TASKBAR_HIDDEN.store(true, Ordering::SeqCst);
         }
     }
+    hide_tray_tooltips();
 }
 
 fn all_taskbars() -> Vec<HWND> {
