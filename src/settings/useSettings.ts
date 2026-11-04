@@ -209,10 +209,10 @@ export function useSettings() {
   );
   const [dockDrives, setDockDrives] = useState<string[]>(() => parseDrives(localStorage.getItem("nectar-dock-drives")));
   const [dockIconOnly, setDockIconOnly] = useState(
-    () => localStorage.getItem("nectar-dock-icon-only") === "true"
+    () => localStorage.getItem("nectar-dock-icon-only") !== "false"
   );
   const [startIcon, setStartIcon] = useState(
-    () => localStorage.getItem("nectar-start-icon") || "default"
+    () => localStorage.getItem("nectar-start-icon") || "windows"
   );
   const [dockAdaptive, setDockAdaptive] = useState(
     () => localStorage.getItem("nectar-dock-adaptive") === "true"

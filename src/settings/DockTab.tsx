@@ -11,8 +11,8 @@ import { InlineError } from "../components/InlineError";
 import { useT } from "../i18n";
 
 const START_ICON_PRESETS = [
-  { key: "default", src: "/canalis.png", label: "Canalis" },
   { key: "windows", src: "/windows.png", label: "Windows" },
+  { key: "default", src: "/canalis.png", label: "Canalis" },
 ];
 
 const startIconTileStyle = (active: boolean): CSSProperties => ({
@@ -382,8 +382,8 @@ export function DockTab({
                     <span style={{ fontSize: "var(--text-heading)" }}>+</span>
                   )}
                 </div>
-                {startIcon !== "default" && (
-                  <div onClick={() => handleStartIconChange("default")} style={startIconTileStyle(false)} title={t("dock.startIcon.reset")}>
+                {startIcon !== "windows" && (
+                  <div onClick={() => handleStartIconChange("windows")} style={startIconTileStyle(false)} title={t("dock.startIcon.reset")}>
                     <RotateCcw size={18} strokeWidth={1.5} />
                   </div>
                 )}

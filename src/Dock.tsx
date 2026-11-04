@@ -251,9 +251,9 @@ const Dock = memo(function Dock() {
   const [dockShowDesktop, setDockShowDesktop] = useState(() => localStorage.getItem("nectar-dock-show-desktop-corner") === "true");
   const [dockRecycle, setDockRecycle] = useState(() => localStorage.getItem("nectar-dock-recycle-enabled") === "true");
   const [dockDrives, setDockDrives] = useState<string[]>(() => parseDrives(localStorage.getItem("nectar-dock-drives")));
-  const [dockIconOnly, setDockIconOnly] = useState(() => localStorage.getItem("nectar-dock-icon-only") === "true");
+  const [dockIconOnly, setDockIconOnly] = useState(() => localStorage.getItem("nectar-dock-icon-only") !== "false");
   const [dockAdaptive, setDockAdaptive] = useState(() => localStorage.getItem("nectar-dock-adaptive") === "true");
-  const [startIcon, setStartIcon] = useState(() => localStorage.getItem("nectar-start-icon") || "default");
+  const [startIcon, setStartIcon] = useState(() => localStorage.getItem("nectar-start-icon") || "windows");
   const [isMaximized, setIsMaximized] = useState(false);
   const [dockMixedReorder, setDockMixedReorder] = useState(() => localStorage.getItem("nectar-dock-mixed-reorder") === "true");
   const [mixedOrder, setMixedOrder] = useState<string[]>([]);
@@ -451,13 +451,13 @@ const Dock = memo(function Dock() {
       setDockRecycle(getVal("nectar-dock-recycle-enabled", "false") === "true");
       setDockDrives(parseDrives(getVal("nectar-dock-drives", "[]")));
 
-      const iconOnly = getVal("nectar-dock-icon-only", "false");
-      setDockIconOnly(iconOnly === "true");
+      const iconOnly = getVal("nectar-dock-icon-only", "true");
+      setDockIconOnly(iconOnly !== "false");
 
       const adaptive = getVal("nectar-dock-adaptive", "false");
       setDockAdaptive(adaptive === "true");
 
-      const startIconVal = getVal("nectar-start-icon", "default") || "default";
+      const startIconVal = getVal("nectar-start-icon", "windows") || "windows";
       setStartIcon(startIconVal);
 
       const mixedReorder = getVal("nectar-dock-mixed-reorder", "false");
