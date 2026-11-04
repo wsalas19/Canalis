@@ -504,7 +504,7 @@ dependencies = [
 
 [[package]]
 name = "canalis"
-version = "1.8.0"
+version = "2.0.0"
 dependencies = [
  "base64 0.22.1",
  "chrono",
