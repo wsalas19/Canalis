@@ -2,13 +2,11 @@ import { openUrl } from "@tauri-apps/plugin-opener";
 import {
   CloudRain,
   Droplets,
-  Eye,
-  Gauge,
   RefreshCw,
   Sun,
   Sunrise,
+  Sunset,
   Thermometer,
-  Wind,
 } from "lucide-react";
 import { useT } from "./i18n";
 import {
@@ -27,10 +25,9 @@ interface WeatherPanelProps {
   onRefresh: () => void;
 }
 
-const compass = (degrees: number) => {
-  const points = ["N", "NE", "E", "SE", "S", "SW", "W", "NW"];
-  return points[Math.round(degrees / 45) % 8];
-};
+const TREND_HOURS = 12;
+const TREND_INSET = 4; // percent of horizontal padding so edge labels don't clip
+const TREND_WIDTH = 100 - TREND_INSET * 2;
 
 const uvBand = (index: number) =>
   index < 3 ? "low" : index < 6 ? "moderate" : index < 8 ? "high" : index < 11 ? "veryhigh" : "extreme";
@@ -74,12 +71,34 @@ export function WeatherPanel({ snapshot, cityName, tempUnit, hour12, onRefresh }
   const HeroIcon = getWeatherIcon(condition, current.isDay);
   const uv = current.uvIndex ?? 0;
   const band = uvBand(uv);
-  const nowHour = snapshot.hourly[0];
-  const rainChance = nowHour?.precipProbability ?? 0;
-  const visibility =
-    current.visibility === null ? "—" : `${(current.visibility / 1000).toFixed(1)} km`;
+  // UV is meaningless after dark; the API reports 0 because the sun is down,
+  // not because the day is mild. Open-Meteo's is_day follows sunrise/sunset.
+  const showUv = current.isDay && current.uvIndex !== null;
+  const hours = snapshot.hourly.slice(0, TREND_HOURS);
+  const rainChance = hours[0]?.precipProbability ?? 0;
   const sunrise = snapshot.daily[0]?.sunrise ?? "";
   const sunset = snapshot.daily[0]?.sunset ?? "";
+
+  const temps = hours.map((hour) => hour.temperature);
+  const minTemp = temps.length ? Math.min(...temps) : 0;
+  const maxTemp = temps.length ? Math.max(...temps) : 0;
+  const tempPad = Math.max(1, (maxTemp - minTemp) * 0.18);
+  const tempFloor = minTemp - tempPad;
+  const tempCeil = maxTemp + tempPad;
+  const xAt = (index: number) =>
+    TREND_INSET + (hours.length <= 1 ? 0 : (index / (hours.length - 1)) * TREND_WIDTH);
+  const yAt = (temperature: number) =>
+    76 - ((temperature - tempFloor) / (tempCeil - tempFloor)) * 54;
+  const linePoints = hours.map((hour, index) => `${xAt(index)},${yAt(hour.temperature)}`).join(" ");
+  const areaPoints = `${TREND_INSET},100 ${linePoints} ${100 - TREND_INSET},100`;
+
+  const trendStart = hours.length ? new Date(hours[0].time).getTime() : 0;
+  const trendEnd = hours.length ? new Date(hours[hours.length - 1].time).getTime() : 0;
+  const sunsetMs = sunset ? new Date(sunset).getTime() : Number.NaN;
+  const sunsetAt =
+    Number.isFinite(sunsetMs) && trendEnd > trendStart && sunsetMs > trendStart && sunsetMs < trendEnd
+      ? TREND_INSET + ((sunsetMs - trendStart) / (trendEnd - trendStart)) * TREND_WIDTH
+      : null;
 
   return (
     <div className="weather-panel">
@@ -117,36 +136,91 @@ export function WeatherPanel({ snapshot, cityName, tempUnit, hour12, onRefresh }
         </div>
       </div>
 
-      <div className="weather-metrics">
-        <div className="weather-metric">
-          <Wind size={11} strokeWidth={2} />
-          <span className="weather-metric-label">{t("weather.dashboard.wind")}</span>
-          <span className="weather-metric-value">
-            {round(current.windSpeed)} km/h {compass(current.windDirection)}
-          </span>
+      <div className="weather-trend">
+        <div className="weather-trend-chart">
+          <div className="weather-trend-rain" aria-hidden="true">
+            {hours.map((hour, index) => (
+              <span
+                key={hour.time}
+                style={{
+                  left: `${xAt(index)}%`,
+                  height: `${Math.max(2, hour.precipProbability * 0.4)}%`,
+                }}
+              />
+            ))}
+          </div>
+
+          <svg
+            className="weather-trend-line"
+            viewBox="0 0 100 100"
+            preserveAspectRatio="none"
+            aria-hidden="true"
+          >
+            <defs>
+              <linearGradient id="weather-trend-fill" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stopColor="rgba(255, 255, 255, 0.16)" />
+                <stop offset="100%" stopColor="rgba(255, 255, 255, 0)" />
+              </linearGradient>
+            </defs>
+            <polygon points={areaPoints} fill="url(#weather-trend-fill)" />
+            <polyline
+              points={linePoints}
+              fill="none"
+              stroke="rgba(255, 255, 255, 0.72)"
+              strokeWidth="1.5"
+              strokeLinejoin="round"
+              strokeLinecap="round"
+              vectorEffect="non-scaling-stroke"
+            />
+          </svg>
+
+          {hours.map((hour, index) => (
+            <div
+              className="weather-trend-point"
+              key={hour.time}
+              style={{ left: `${xAt(index)}%`, top: `${yAt(hour.temperature)}%` }}
+            >
+              <span className="weather-trend-value">{round(hour.temperature)}°</span>
+              <span className="weather-trend-dot" />
+            </div>
+          ))}
+
+          {sunsetAt !== null && (
+            <div className="weather-trend-sunset" style={{ left: `${sunsetAt}%` }}>
+              <span className="weather-trend-sunset-label">
+                <Sunset size={9} strokeWidth={2} />
+                {clock(sunset)}
+              </span>
+            </div>
+          )}
         </div>
+
+        <div className="weather-trend-times" aria-hidden="true">
+          {hours.map((hour, index) =>
+            index % 2 === 0 ? (
+              <span key={hour.time} style={{ left: `${xAt(index)}%` }}>
+                {clock(hour.time)}
+              </span>
+            ) : null,
+          )}
+        </div>
+      </div>
+
+      <div className="weather-metrics">
         <div className="weather-metric">
           <CloudRain size={11} strokeWidth={2} />
           <span className="weather-metric-label">{t("weather.dashboard.rain")}</span>
           <span className="weather-metric-value">{round(rainChance)}%</span>
         </div>
-        <div className={`weather-metric weather-metric--uv weather-metric--${band}`}>
-          <Sun size={11} strokeWidth={2} />
-          <span className="weather-metric-label">{t("weather.dashboard.uv")}</span>
-          <span className="weather-metric-value">
-            {round(uv)} · {t(`weather.uv.${band}`)}
-          </span>
-        </div>
-        <div className="weather-metric">
-          <Gauge size={11} strokeWidth={2} />
-          <span className="weather-metric-label">{t("weather.dashboard.pressure")}</span>
-          <span className="weather-metric-value">{round(current.pressure)} hPa</span>
-        </div>
-        <div className="weather-metric">
-          <Eye size={11} strokeWidth={2} />
-          <span className="weather-metric-label">{t("weather.dashboard.visibility")}</span>
-          <span className="weather-metric-value">{visibility}</span>
-        </div>
+        {showUv && (
+          <div className={`weather-metric weather-metric--uv weather-metric--${band}`}>
+            <Sun size={11} strokeWidth={2} />
+            <span className="weather-metric-label">{t("weather.dashboard.uv")}</span>
+            <span className="weather-metric-value">
+              {round(uv)} · {t(`weather.uv.${band}`)}
+            </span>
+          </div>
+        )}
         <div className="weather-metric">
           <Sunrise size={11} strokeWidth={2} />
           <span className="weather-metric-label">{t("weather.dashboard.sun")}</span>
@@ -154,25 +228,6 @@ export function WeatherPanel({ snapshot, cityName, tempUnit, hour12, onRefresh }
             {clock(sunrise)} / {clock(sunset)}
           </span>
         </div>
-      </div>
-
-      <div className="weather-hours">
-        {snapshot.hourly.slice(0, 10).map((hour) => {
-          const HourIcon = getWeatherIcon(conditionForCode(hour.weatherCode), hour.isDay);
-          return (
-            <div className="weather-hour" key={hour.time}>
-              <span className="weather-hour-time">{clock(hour.time)}</span>
-              <HourIcon size={13} strokeWidth={1.8} className="weather-hour-icon" />
-              <span className="weather-hour-temp">{round(hour.temperature)}°</span>
-              <span
-                className="weather-hour-rain"
-                style={{ opacity: 0.15 + (hour.precipProbability / 100) * 0.85 }}
-              >
-                {round(hour.precipProbability)}%
-              </span>
-            </div>
-          );
-        })}
       </div>
 
       <div className="weather-days">

@@ -63,13 +63,9 @@ const SNAPSHOT_TTL_MS = 30 * 60 * 1000;
 export interface WeatherHour {
   time: string;
   temperature: number;
-  apparent: number;
   precipProbability: number;
   weatherCode: number;
   isDay: boolean;
-  humidity: number;
-  windSpeed: number;
-  uvIndex: number;
 }
 
 export interface WeatherDay {
@@ -80,7 +76,6 @@ export interface WeatherDay {
   precipProbabilityMax: number;
   sunrise: string;
   sunset: string;
-  uvIndexMax: number;
 }
 
 export interface WeatherSnapshot {
@@ -93,14 +88,7 @@ export interface WeatherSnapshot {
     humidity: number;
     weatherCode: number;
     isDay: boolean;
-    windSpeed: number;
-    windDirection: number;
-    windGusts: number;
-    precipitation: number;
-    cloudCover: number;
-    pressure: number;
     uvIndex: number | null;
-    visibility: number | null;
   };
   hourly: WeatherHour[];
   daily: WeatherDay[];
@@ -202,9 +190,9 @@ async function fetchSnapshotForCoords(
   const unitParam = unit === "fahrenheit" ? "&temperature_unit=fahrenheit" : "";
   const url =
     `https://api.open-meteo.com/v1/forecast?latitude=${latitude}&longitude=${longitude}` +
-    `&current=temperature_2m,apparent_temperature,relative_humidity_2m,weather_code,is_day,wind_speed_10m,wind_direction_10m,wind_gusts_10m,precipitation,cloud_cover,pressure_msl,uv_index,visibility` +
-    `&hourly=temperature_2m,apparent_temperature,precipitation_probability,weather_code,is_day,relative_humidity_2m,wind_speed_10m,uv_index` +
-    `&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max,precipitation_sum,sunrise,sunset,uv_index_max` +
+    `&current=temperature_2m,apparent_temperature,relative_humidity_2m,weather_code,is_day,uv_index` +
+    `&hourly=temperature_2m,precipitation_probability,weather_code,is_day` +
+    `&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max,sunrise,sunset` +
     `&forecast_hours=24&forecast_days=3&timezone=auto${unitParam}`;
   const response = await fetch(url);
   if (!response.ok) {
@@ -220,13 +208,9 @@ async function fetchSnapshotForCoords(
   const hourly: WeatherHour[] = hourlyTimes.map((time, i) => ({
     time,
     temperature: data.hourly.temperature_2m?.[i] ?? 0,
-    apparent: data.hourly.apparent_temperature?.[i] ?? 0,
     precipProbability: data.hourly.precipitation_probability?.[i] ?? 0,
     weatherCode: data.hourly.weather_code?.[i] ?? 0,
     isDay: data.hourly.is_day?.[i] === 1,
-    humidity: data.hourly.relative_humidity_2m?.[i] ?? 0,
-    windSpeed: data.hourly.wind_speed_10m?.[i] ?? 0,
-    uvIndex: data.hourly.uv_index?.[i] ?? 0,
   }));
 
   const d = data?.daily ?? {};
@@ -239,7 +223,6 @@ async function fetchSnapshotForCoords(
     precipProbabilityMax: d.precipitation_probability_max?.[i] ?? 0,
     sunrise: d.sunrise?.[i] ?? "",
     sunset: d.sunset?.[i] ?? "",
-    uvIndexMax: d.uv_index_max?.[i] ?? 0,
   }));
 
   return {
@@ -252,14 +235,7 @@ async function fetchSnapshotForCoords(
       humidity: c.relative_humidity_2m ?? 0,
       weatherCode: c.weather_code ?? 0,
       isDay: c.is_day === 1,
-      windSpeed: c.wind_speed_10m ?? 0,
-      windDirection: c.wind_direction_10m ?? 0,
-      windGusts: c.wind_gusts_10m ?? 0,
-      precipitation: c.precipitation ?? 0,
-      cloudCover: c.cloud_cover ?? 0,
-      pressure: c.pressure_msl ?? 0,
       uvIndex: typeof c.uv_index === "number" ? c.uv_index : null,
-      visibility: typeof c.visibility === "number" ? c.visibility : null,
     },
     hourly,
     daily,

@@ -122,7 +122,7 @@
 
 .weather-metrics {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(96px, 1fr));
   gap: 4px 6px;
 }
 
@@ -180,45 +180,106 @@
   color: #bf5af2;
 }
 
-.weather-hours {
-  display: flex;
-  gap: 2px;
-  overflow-x: auto;
-}
-
-.weather-hours::-webkit-scrollbar {
-  display: none;
-}
-
-.weather-hour {
-  flex: 1 1 0;
-  min-width: 0;
+.weather-trend {
   display: flex;
   flex-direction: column;
+  gap: 2px;
+  padding: 0 1px;
+}
+
+.weather-trend-chart {
+  position: relative;
+  height: 72px;
+  margin: 0 10px;
+}
+
+.weather-trend-rain {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.weather-trend-rain span {
+  position: absolute;
+  bottom: 0;
+  width: 3px;
+  margin-left: -1.5px;
+  border-radius: 2px 2px 0 0;
+  background: rgba(100, 210, 255, 0.32);
+}
+
+.weather-trend-line {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.weather-trend-point {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.weather-trend-dot {
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: var(--nectar-text, #fff);
+  box-shadow: 0 0 0 1.5px rgba(0, 0, 0, 0.28);
+}
+
+.weather-trend-value {
+  position: absolute;
+  bottom: 6px;
+  font-size: var(--text-caption);
+  font-weight: 600;
+  line-height: 1;
+  white-space: nowrap;
+  opacity: 0.92;
+}
+
+.weather-trend-sunset {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 0;
+  border-left: 1px dashed rgba(255, 255, 255, 0.3);
+  pointer-events: none;
+}
+
+.weather-trend-sunset-label {
+  position: absolute;
+  top: 0;
+  left: 0;
+  transform: translate(-50%, -20%);
+  display: flex;
   align-items: center;
   gap: 2px;
-  padding: 3px 0;
-  border-radius: 6px;
+  padding: 1px 3px;
+  border-radius: 4px;
+  background: rgba(16, 16, 18, 0.72);
+  font-size: var(--text-micro);
+  line-height: 1;
+  color: var(--nectar-text-muted, rgba(255, 255, 255, 0.55));
   white-space: nowrap;
 }
 
-.weather-hour-time {
-  font-size: var(--text-caption);
-  color: var(--nectar-text-muted, rgba(255, 255, 255, 0.5));
+.weather-trend-times {
+  position: relative;
+  height: 12px;
 }
 
-.weather-hour-icon {
-  opacity: 0.85;
-}
-
-.weather-hour-temp {
-  font-size: var(--text-caption-strong);
-  font-weight: 500;
-}
-
-.weather-hour-rain {
-  font-size: var(--text-caption);
-  color: #64d2ff;
+.weather-trend-times span {
+  position: absolute;
+  top: 0;
+  transform: translateX(-50%);
+  font-size: var(--text-micro);
+  line-height: 1;
+  color: var(--nectar-text-muted, rgba(255, 255, 255, 0.45));
+  white-space: nowrap;
 }
 
 .weather-days {
