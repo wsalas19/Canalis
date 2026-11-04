@@ -201,3 +201,24 @@ jobs:
           OUT="Canalis-Setup-${VERSION}.exe"
           cp "installer-app/src-tauri/target/release/canalis-installer.exe" "$OUT"
           gh release upload "${{ github.ref_name }}" "$OUT" --clobber
+
+      - name: Write and upload checksums
+        shell: pwsh
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          $version = "${{ github.ref_name }}".TrimStart('v')
+          $files = @(
+            "canalis-$version-portable-windows-x64.zip",
+            "Canalis-Setup-$version.exe",
+            "src-tauri/target/release/bundle/nsis/Canalis_${version}_x64-setup.exe",
+            "src-tauri/target/release/bundle/msi/Canalis_${version}_x64_en-US.msi"
+          )
+          $lines = foreach ($file in $files) {
+            if (Test-Path $file) {
+              $hash = (Get-FileHash $file -Algorithm SHA256).Hash.ToLower()
+              "$hash  $(Split-Path $file -Leaf)"
+            }
+          }
+          $lines | Set-Content SHA256SUMS.txt -Encoding ascii
+          gh release upload "${{ github.ref_name }}" SHA256SUMS.txt --clobber
