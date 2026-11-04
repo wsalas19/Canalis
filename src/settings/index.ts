@@ -1,4 +1,4 @@
-export { useSettings } from "./useSettings";
+export { useSettings, useFailedSaveCount, retryFailedSettings } from "./useSettings";
 export { SettingRow } from "./SettingRow";
 export { GeneralTab } from "./GeneralTab";
 export { AppearanceTab } from "./AppearanceTab";

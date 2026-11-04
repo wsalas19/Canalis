@@ -3,6 +3,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { emit } from "@tauri-apps/api/event";
 import { Compass, Download, FlaskConical, RefreshCw, FileDown, Upload, RotateCcw, Trash2, ClipboardCopy, FolderOpen, Crosshair, Image as ImageIcon } from "lucide-react";
 import { SettingRow } from "./SettingRow";
+import { InlineError } from "../components/InlineError";
 import { useT } from "../i18n";
 
 interface AboutTabProps {
@@ -13,8 +14,10 @@ interface AboutTabProps {
   togglePrereleaseChannel: () => void;
   updateStatus: string;
   updateVersion: string;
+  updateErrorKind: "check" | "install" | null;
   checkForUpdates: () => void;
   installUpdate: () => void;
+  retryUpdate: () => void;
   exportStatus: string;
   importStatus: string;
   handleExportSettings: () => void;
@@ -34,8 +37,10 @@ export function AboutTab({
   togglePrereleaseChannel,
   updateStatus,
   updateVersion,
+  updateErrorKind,
   checkForUpdates,
   installUpdate,
+  retryUpdate,
   exportStatus,
   importStatus,
   handleExportSettings,
@@ -50,10 +55,21 @@ export function AboutTab({
   const [diagStatus, setDiagStatus] = useState<"idle" | "working" | "copied" | "error">("idle");
   const [hitboxLogging, setHitboxLogging] = useState(false);
   const [iconStatus, setIconStatus] = useState<"idle" | "working" | "done" | "error">("idle");
+  const [logError, setLogError] = useState(false);
 
   useEffect(() => {
     invoke<boolean>("get_hitbox_logging").then(setHitboxLogging).catch(() => {});
   }, []);
+
+  const openLogs = async () => {
+    setLogError(false);
+    try {
+      await invoke("open_log_folder");
+    } catch (e) {
+      console.error("Failed to open the log folder:", e);
+      setLogError(true);
+    }
+  };
 
   const copyDiagnostics = async () => {
     setDiagStatus("working");
@@ -185,7 +201,13 @@ export function AboutTab({
         <button
           className={`update-pill update-pill--${updateStatus || "idle"}`}
           disabled={pillBusy}
-          onClick={() => (updateStatus === "available" ? installUpdate() : checkForUpdates())}
+          onClick={() =>
+            updateStatus === "available"
+              ? installUpdate()
+              : updateStatus === "error"
+                ? retryUpdate()
+                : checkForUpdates()
+          }
         >
           {getPillLabel()}
         </button>
@@ -213,8 +235,24 @@ export function AboutTab({
           desc={getUpdateDesc()}
           action
           divider={false}
-          onClick={() => (updateStatus === "available" ? installUpdate() : checkForUpdates())}
+          onClick={() =>
+            updateStatus === "available"
+              ? installUpdate()
+              : updateStatus === "error"
+                ? retryUpdate()
+                : checkForUpdates()
+          }
         />
+        {updateStatus === "error" && (
+          <InlineError
+            message={
+              updateErrorKind === "install"
+                ? t("errors.update.install")
+                : t("errors.update.check")
+            }
+            onRetry={retryUpdate}
+          />
+        )}
       </div>
 
       <div className="setting-group-label setting-group-label--spaced">
@@ -253,7 +291,10 @@ export function AboutTab({
           action
           onClick={copyDiagnostics}
         />
-        <SettingRow icon={FolderOpen} label={t("about.logs")} desc={t("about.logs.desc")} action onClick={() => invoke("open_log_folder").catch(() => {})} />
+        <SettingRow icon={FolderOpen} label={t("about.logs")} desc={t("about.logs.desc")} action onClick={openLogs} />
+        {logError && (
+          <InlineError message={t("errors.about.logs")} onRetry={openLogs} />
+        )}
         <SettingRow
           icon={Crosshair}
           label={t("about.hitbox")}

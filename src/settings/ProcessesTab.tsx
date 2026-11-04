@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { X, RefreshCw } from "lucide-react";
 import { useT } from "../i18n";
+import { InlineError } from "../components/InlineError";
 
 interface ProcessInfo {
   pid: number;
@@ -34,13 +35,22 @@ export function ProcessesTab() {
   const [processes, setProcesses] = useState<ProcessInfo[]>([]);
   const [endingPid, setEndingPid] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
+  const [endError, setEndError] = useState<string | null>(null);
   const refreshTimer = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  const refresh = () => {
-    invoke<ProcessInfo[]>("get_running_processes")
-      .then((list) => setProcesses(list))
-      .catch((e) => console.error("Failed to list processes:", e))
-      .finally(() => setLoading(false));
+  const refresh = async () => {
+    try {
+      const list = await invoke<ProcessInfo[]>("get_running_processes");
+      setProcesses(list);
+      setLoadError(false);
+      setEndError(null);
+    } catch (e) {
+      console.error("Failed to list processes:", e);
+      setLoadError(true);
+    } finally {
+      setLoading(false);
+    }
   };
 
   useEffect(() => {
@@ -54,11 +64,13 @@ export function ProcessesTab() {
   const handleEnd = async (proc: ProcessInfo) => {
     if (endingPid !== null) return;
     setEndingPid(proc.pid);
+    setEndError(null);
     try {
       await invoke("kill_process", { pid: proc.pid, name: proc.name });
       setProcesses((prev) => prev.filter((p) => p.pid !== proc.pid));
     } catch (e) {
       console.error("Failed to end process:", e);
+      setEndError(t("errors.processes.end", { name: proc.name }));
     } finally {
       setEndingPid(null);
     }
@@ -72,6 +84,14 @@ export function ProcessesTab() {
           <RefreshCw size={12} strokeWidth={1.75} />
         </button>
       </div>
+      {loadError && (
+        <InlineError
+          message={t("errors.processes.list")}
+          onRetry={refresh}
+          className="inline-error--flush"
+        />
+      )}
+      {endError && <InlineError message={endError} className="inline-error--flush" />}
       <div className="setting-group processes-list">
         {loading && <div className="processes-empty">{t("common.loading")}</div>}
         {!loading && processes.length === 0 && <div className="processes-empty">{t("processes.empty")}</div>}

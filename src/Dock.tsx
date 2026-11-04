@@ -279,6 +279,12 @@ const Dock = memo(function Dock() {
   const [toast, setToast] = useState<string | null>(null);
   const iconPickerTargetRef = useRef<string | null>(null);
   const toastTimerRef = useRef<any>(null);
+
+  const showDockToast = (message: string) => {
+    if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+    setToast(message);
+    toastTimerRef.current = setTimeout(() => setToast(null), 4000);
+  };
   const dockRef = useRef<HTMLDivElement>(null);
   const [popupBottom, setPopupBottom] = useState(56);
   const [scale, setScale] = useState(() => parseFloat(localStorage.getItem("nectar-scale") || "1.0"));
@@ -628,9 +634,7 @@ const Dock = memo(function Dock() {
         setCustomIcons(prev => ({ ...prev, [target]: newIcon }));
       } catch (err) {
         const msg = typeof err === 'string' ? err : t('dockmenu.iconError');
-        if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
-        setToast(msg);
-        toastTimerRef.current = setTimeout(() => setToast(null), 4000);
+        showDockToast(msg);
       }
     };
     reader.readAsDataURL(file);
@@ -674,6 +678,7 @@ const Dock = memo(function Dock() {
       });
     } catch (err) {
       console.error("Failed to close window:", err);
+      showDockToast(t('errors.dock.closeWindow'));
     }
   };
 
@@ -691,6 +696,7 @@ const Dock = memo(function Dock() {
       }
     } catch (e) {
       console.error(`Failed to interact with ${app.name}:`, e);
+      showDockToast(t('errors.dock.openApp', { name: app.name }));
     }
   };
 
@@ -700,6 +706,7 @@ const Dock = memo(function Dock() {
       await invoke('launch_new_instance', { appPath: app.path, appName: app.name, args: app.args ?? null });
     } catch (e) {
       console.error(`Failed to launch a new instance of ${app.name}:`, e);
+      showDockToast(t('errors.dock.newInstance', { name: app.name }));
     }
   };
 
@@ -710,6 +717,28 @@ const Dock = memo(function Dock() {
     e.preventDefault();
     e.stopPropagation();
     handleNewInstance(app);
+  };
+
+  const pinnedSaveRef = useRef<Promise<void>>(Promise.resolve());
+  const pinnedSaveSeq = useRef(0);
+  const persistPinnedApps = (apps: AppInfo[]) => {
+    const seq = ++pinnedSaveSeq.current;
+    pinnedSaveRef.current = pinnedSaveRef.current.then(async () => {
+      try {
+        await invoke('save_pinned_apps', { apps });
+      } catch (err) {
+        console.error('Failed to save pinned apps:', err);
+        // One silent retry: a transient write/rename race should not bother the user.
+        await new Promise((resolve) => setTimeout(resolve, 500));
+        try {
+          await invoke('save_pinned_apps', { apps });
+        } catch (retryErr) {
+          console.error('Failed to save pinned apps after retry:', retryErr);
+          if (seq === pinnedSaveSeq.current) showDockToast(t('errors.dock.savePinned'));
+        }
+      }
+    });
+    return pinnedSaveRef.current;
   };
 
   const togglePin = async (app: AppInfo) => {
@@ -723,7 +752,7 @@ const Dock = memo(function Dock() {
       fetchIcon(app.path, app.name); 
     }
     setPinnedApps(newPinned);
-    await invoke('save_pinned_apps', { apps: newPinned });
+    void persistPinnedApps(newPinned);
     closeMenu();
   };
 
@@ -911,7 +940,7 @@ const Dock = memo(function Dock() {
   const handleDragEnd = () => {
     setIsDragging(false);
     setPressedApp(null);
-    invoke('save_pinned_apps', { apps: pinnedApps }).catch(console.error);
+    void persistPinnedApps(pinnedApps);
   };
 
   const handleUnpinnedReorder = (newPaths: string[]) => {
@@ -940,7 +969,7 @@ const Dock = memo(function Dock() {
     setIsDragging(false);
     setPressedApp(null);
     if (app.is_pinned) {
-      invoke('save_pinned_apps', { apps: pinnedApps }).catch(console.error);
+      void persistPinnedApps(pinnedApps);
     }
   };
 
@@ -1238,7 +1267,7 @@ const Dock = memo(function Dock() {
 
               {!legacyMode && dockTaskView && renderShortcut(
                 'taskview', t('dockmenu.taskView'), 0.22,
-                () => invoke('open_app', { appName: 'taskview' }).catch((err) => console.error('Failed to open Task View:', err)),
+                () => invoke('open_app', { appName: 'taskview' }).catch((err) => { console.error('Failed to open Task View:', err); showDockToast(t('errors.dock.openApp', { name: t('dockmenu.taskView') })); }),
                 <TaskViewIcon />
               )}
 
@@ -1301,7 +1330,7 @@ const Dock = memo(function Dock() {
                     >
                       <div className="preview-items">
                         {previewData.previews.map((prev, idx) => (
-                          <div key={prev.hwnd} className="preview-item" onClick={() => invoke('focus_window', { hwnd: prev.hwnd })}>
+                          <div key={prev.hwnd} className="preview-item" onClick={() => invoke('focus_window', { hwnd: prev.hwnd }).catch(() => showDockToast(t('errors.dock.focusWindow')))}>
                             <img src={prev.image} alt={`Preview ${idx}`} />
                             <div className="preview-label">{prev.title || app.name}</div>
                             <button
@@ -1406,7 +1435,7 @@ const Dock = memo(function Dock() {
                           >
                             <div className="preview-items">
                               {previewData.previews.map((prev, idx) => (
-                                <div key={prev.hwnd} className="preview-item" onClick={() => invoke('focus_window', { hwnd: prev.hwnd })}>
+                                <div key={prev.hwnd} className="preview-item" onClick={() => invoke('focus_window', { hwnd: prev.hwnd }).catch(() => showDockToast(t('errors.dock.focusWindow')))}>
                                   <img src={prev.image} alt={`Preview ${idx}`} />
                                   <div className="preview-label">{prev.title || app.name}</div>
                                   <button
@@ -1504,7 +1533,7 @@ const Dock = memo(function Dock() {
                           >
                             <div className="preview-items">
                               {previewData.previews.map((prev, idx) => (
-                                <div key={prev.hwnd} className="preview-item" onClick={() => invoke('focus_window', { hwnd: prev.hwnd })}>
+                                <div key={prev.hwnd} className="preview-item" onClick={() => invoke('focus_window', { hwnd: prev.hwnd }).catch(() => showDockToast(t('errors.dock.focusWindow')))}>
                                   <img src={prev.image} alt={`Preview ${idx}`} />
                                   <div className="preview-label">{prev.title || app.name}</div>
                                   <button
@@ -1647,7 +1676,7 @@ const Dock = memo(function Dock() {
                 <div className="submenu">
                   <div className="menu-item" onClick={() => { invoke('open_calendar_window'); closeMenu(); }}>{t("dockmenu.openCalendar")}</div>
                   <div className="menu-item" onClick={() => { invoke('open_settings_window'); closeMenu(); }}>{t("dockmenu.openSettings")}</div>
-                  <div className="menu-item" onClick={() => { invoke('open_app', { appName: 'taskmgr' }); closeMenu(); }}>{t("dockmenu.taskManager")}</div>
+                  <div className="menu-item" onClick={() => { invoke('open_app', { appName: 'taskmgr' }).catch(() => showDockToast(t('errors.dock.openApp', { name: t('dockmenu.taskManager') }))); closeMenu(); }}>{t("dockmenu.taskManager")}</div>
                   <div className="menu-item" onClick={() => invoke('restart_nectar')}>{t("general.restart")}</div>
                   <div className="menu-item" onClick={() => { handleClearIconCache(); closeMenu(); }}>{t("dockmenu.clearIconCache")}</div>
                   <div className="menu-divider" />
@@ -1658,12 +1687,16 @@ const Dock = memo(function Dock() {
                 <>
                   <div className="menu-divider" />
                   <div className="menu-item quit" onClick={async () => {
-                    if (contextMenu.app?.hwnd) {
+                    if (!contextMenu.app?.hwnd) return;
+                    try {
                       await invoke('end_task', {
                         hwnd: contextMenu.app.hwnd,
                         allHwnds: contextMenu.app.all_hwnds?.map(([h]) => h) ?? null,
                       });
                       closeMenu();
+                    } catch (err) {
+                      console.error(`Failed to end ${contextMenu.app.name}:`, err);
+                      showDockToast(t('errors.dock.endTask', { name: contextMenu.app.name }));
                     }
                   }}>
                     {t("dockmenu.quitApp", { name: contextMenu.app.name })}
@@ -1686,7 +1719,7 @@ const Dock = memo(function Dock() {
                 <div className="submenu">
                   <div className="menu-item" onClick={() => { invoke('open_calendar_window'); closeMenu(); }}>{t("dockmenu.openCalendar")}</div>
                   <div className="menu-item" onClick={() => { invoke('open_settings_window'); closeMenu(); }}>{t("dockmenu.openSettings")}</div>
-                  <div className="menu-item" onClick={() => { invoke('open_app', { appName: 'taskmgr' }); closeMenu(); }}>{t("dockmenu.taskManager")}</div>
+                  <div className="menu-item" onClick={() => { invoke('open_app', { appName: 'taskmgr' }).catch(() => showDockToast(t('errors.dock.openApp', { name: t('dockmenu.taskManager') }))); closeMenu(); }}>{t("dockmenu.taskManager")}</div>
                   <div className="menu-item" onClick={() => invoke('restart_nectar')}>{t("general.restart")}</div>
                   <div className="menu-item" onClick={() => { handleClearIconCache(); closeMenu(); }}>{t("dockmenu.clearIconCache")}</div>
                   <div className="menu-divider" />

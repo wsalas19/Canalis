@@ -57,10 +57,17 @@ pub fn wake_mixer_watchdog() {
 
 /// Send a control to the system worker and unpark it, so a parked loop reacts at once.
 pub fn send_system_command(command: SystemCommand) {
-    if let Some(sender) = crate::state::COMMAND_SENDER.get() {
-        let _ = sender.send(command);
-    }
+    let _ = try_send_system_command(command);
+}
+
+/// Same as send_system_command, but reports a missing/closed worker channel.
+pub fn try_send_system_command(command: SystemCommand) -> Result<(), String> {
+    let Some(sender) = crate::state::COMMAND_SENDER.get() else {
+        return Err("The system worker is not ready".to_string());
+    };
+    sender.send(command).map_err(|_| "The system worker stopped".to_string())?;
     wake_media_worker();
+    Ok(())
 }
 
 /// Let the app's CSS radius win over the OS one. DWM rounds borderless windows at

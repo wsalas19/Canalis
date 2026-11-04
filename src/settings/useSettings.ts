@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useSyncExternalStore } from "react";
 import { parseCcLayout, parsePanelOrder, type CcLayout, type PanelId } from "../panelOrder";
 import { invoke } from "@tauri-apps/api/core";
 import { listen, emit } from "@tauri-apps/api/event";
@@ -12,7 +12,50 @@ import type { WidgetConfig, MonitorInfo, MonitorMode } from "./types";
 
 function saveSetting(key: string, value: string) {
   localStorage.setItem(key, value);
-  invoke("save_setting", { key, value }).catch(console.error);
+  void persistSetting(key, value);
+}
+
+// Failed writes are kept until a retry succeeds. The Settings window watches
+// this with useSyncExternalStore and offers one Retry for the whole batch.
+const failedSaves = new Map<string, string | null>();
+const saveListeners = new Set<() => void>();
+
+function notifySaveListeners() {
+  saveListeners.forEach((listener) => listener());
+}
+
+function persistSetting(key: string, value: string | null): Promise<void> {
+  return invoke("save_setting", { key, value })
+    .then(() => {
+      if (failedSaves.delete(key)) notifySaveListeners();
+    })
+    .catch((e) => {
+      console.error(`Failed to save setting ${key}:`, e);
+      const isNew = !failedSaves.has(key);
+      failedSaves.set(key, value);
+      if (isNew) notifySaveListeners();
+    });
+}
+
+/** Retry every write that failed; the banner stays until the map is empty. */
+export function retryFailedSettings(): Promise<void> {
+  return Promise.all([...failedSaves].map(([key, value]) => persistSetting(key, value))).then(
+    () => undefined,
+  );
+}
+
+/** Number of settings that still need to be written, for the Settings banner. */
+export function useFailedSaveCount(): number {
+  return useSyncExternalStore(
+    (listener) => {
+      saveListeners.add(listener);
+      return () => {
+        saveListeners.delete(listener);
+      };
+    },
+    () => failedSaves.size,
+    () => 0,
+  );
 }
 
 // Rapid slider movement would otherwise write settings.json and broadcast a
@@ -26,7 +69,7 @@ function flushSetting(key: string) {
   if (!entry) return;
   pendingSaves.delete(key);
   window.clearTimeout(entry.timer);
-  invoke("save_setting", { key, value: entry.value }).catch(console.error);
+  void persistSetting(key, entry.value);
 }
 
 export function flushPendingSaves() {
@@ -63,6 +106,7 @@ function parseDrives(val: string | null): string[] {
 
 export function useSettings() {
   const [autostart, setAutostart] = useState(false);
+  const [autostartError, setAutostartError] = useState(false);
   const [weatherEnabled, setWeatherEnabled] = useState(true);
   const [weatherBlockEnabled, setWeatherBlockEnabled] = useState(
     () => localStorage.getItem("nectar-weather-block-enabled") === "true"
@@ -205,6 +249,7 @@ export function useSettings() {
     "idle" | "checking" | "available" | "uptodate" | "error" | "downloading" | "installing"
   >("idle");
   const [updateVersion, setUpdateVersion] = useState("");
+  const [updateErrorKind, setUpdateErrorKind] = useState<"check" | "install" | null>(null);
   const [appVersion, setAppVersion] = useState("");
   const [autoUpdate, setAutoUpdate] = useState(
     () => localStorage.getItem("nectar-auto-update") === "true"
@@ -511,6 +556,7 @@ export function useSettings() {
   // ── Update checker ──
   const checkForUpdates = async (manual = true) => {
     setUpdateStatus("checking");
+    setUpdateErrorKind(null);
     try {
       const result = await invoke<UpdateCheckResult>("check_for_updates", { force: manual });
       if (result.available) {
@@ -521,29 +567,37 @@ export function useSettings() {
       }
     } catch (e) {
       console.error("Updater error:", e);
+      setUpdateErrorKind("check");
       setUpdateStatus("error");
     }
   };
 
   const installUpdate = async () => {
     try {
+      setUpdateErrorKind(null);
       setUpdateStatus("downloading");
       await invoke("install_update");
       setUpdateStatus("idle");
     } catch (e) {
       console.error(e);
+      setUpdateErrorKind("install");
       setUpdateStatus("error");
     }
   };
+
+  const retryUpdate = () =>
+    updateErrorKind === "install" ? installUpdate() : checkForUpdates();
 
   // Reflect install progress triggered from any window (including auto-update).
   useEffect(() => {
     const unlisten = listen<{ status: string; progress?: number }>("auto-update-status", (event) => {
       switch (event.payload.status) {
         case "downloading":
+          setUpdateErrorKind(null);
           setUpdateStatus("downloading");
           break;
         case "installing":
+          setUpdateErrorKind(null);
           setUpdateStatus("installing");
           break;
         case "done":
@@ -558,6 +612,7 @@ export function useSettings() {
 
   // ── Autostart ──
   const toggleAutostart = async () => {
+    setAutostartError(false);
     try {
       const currentlyEnabled = await isEnabled();
       if (currentlyEnabled) {
@@ -567,7 +622,10 @@ export function useSettings() {
         await enable();
         setAutostart(true);
       }
-    } catch (err) {}
+    } catch (err) {
+      console.error("Failed to change autostart:", err);
+      setAutostartError(true);
+    }
   };
 
   // ── Simple boolean toggles ──
@@ -782,13 +840,13 @@ export function useSettings() {
   const resetCcLayout = () => {
     setCcLayout({});
     localStorage.removeItem("nectar-cc-layout");
-    invoke("save_setting", { key: "nectar-cc-layout", value: null }).catch(() => {});
+    void persistSetting("nectar-cc-layout", null);
   };
 
   const resetPanelOrder = () => {
     setPanelOrder(null);
     localStorage.removeItem("nectar-panel-order");
-    invoke("save_setting", { key: "nectar-panel-order", value: null }).catch(() => {});
+    void persistSetting("nectar-panel-order", null);
   };
 
   const togglePanelShelf = () => {
@@ -861,7 +919,7 @@ export function useSettings() {
     const value = next ? "prerelease" : "stable";
     setPrereleaseChannel(next);
     localStorage.setItem("nectar-update-channel", value);
-    await invoke("save_setting", { key: "nectar-update-channel", value }).catch(console.error);
+    await persistSetting("nectar-update-channel", value);
     checkForUpdates();
   };
 
@@ -1008,9 +1066,9 @@ export function useSettings() {
     localStorage.setItem("nectar-weather-city", city.name);
     localStorage.setItem("nectar-weather-lat", city.latitude.toString());
     localStorage.setItem("nectar-weather-lon", city.longitude.toString());
-    await invoke("save_setting", { key: "nectar-weather-lat", value: city.latitude.toString() }).catch(() => {});
-    await invoke("save_setting", { key: "nectar-weather-lon", value: city.longitude.toString() }).catch(() => {});
-    await invoke("save_setting", { key: "nectar-weather-city", value: city.name }).catch(() => {});
+    await persistSetting("nectar-weather-lat", city.latitude.toString());
+    await persistSetting("nectar-weather-lon", city.longitude.toString());
+    await persistSetting("nectar-weather-city", city.name);
     emit("weather-refresh", { lat: city.latitude, lon: city.longitude, city: city.name });
   };
 
@@ -1022,9 +1080,9 @@ export function useSettings() {
     localStorage.removeItem("nectar-weather-city");
     localStorage.removeItem("nectar-weather-lat");
     localStorage.removeItem("nectar-weather-lon");
-    await invoke("save_setting", { key: "nectar-weather-lat", value: null }).catch(() => {});
-    await invoke("save_setting", { key: "nectar-weather-lon", value: null }).catch(() => {});
-    await invoke("save_setting", { key: "nectar-weather-city", value: null }).catch(() => {});
+    await persistSetting("nectar-weather-lat", null);
+    await persistSetting("nectar-weather-lon", null);
+    await persistSetting("nectar-weather-city", null);
     emit("weather-refresh", true);
   };
 
@@ -1105,6 +1163,7 @@ export function useSettings() {
   return {
     // System
     autostart,
+    autostartError,
     toggleAutostart,
     autoUpdate,
     toggleAutoUpdate,
@@ -1266,9 +1325,11 @@ export function useSettings() {
     // Updates
     updateStatus,
     updateVersion,
+    updateErrorKind,
     appVersion,
     checkForUpdates,
     installUpdate,
+    retryUpdate,
 
     exportStatus,
     importStatus,

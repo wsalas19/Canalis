@@ -544,5 +544,20 @@
   "dockmenu.showDesktop": "Show desktop",
   "notch.ccSliders": "Sliders",
   "cc.layout.volume": "Volume",
-  "cc.layout.brightness": "Brightness"
+  "cc.layout.brightness": "Brightness",
+  "common.retry": "Retry",
+  "errors.settings.saveFailed": "Some changes couldn't be saved",
+  "errors.dock.savePinned": "Couldn't save the dock order",
+  "errors.dock.openApp": "Couldn't open or switch to {name}",
+  "errors.dock.focusWindow": "Couldn't switch to that window",
+  "errors.dock.newInstance": "Couldn't open a new window for {name}",
+  "errors.dock.endTask": "Couldn't end {name}",
+  "errors.dock.closeWindow": "Couldn't close the window",
+  "errors.processes.list": "Couldn't load running processes",
+  "errors.processes.end": "Couldn't end {name}",
+  "errors.drives": "Couldn't load drives",
+  "errors.autostart": "Couldn't change the startup setting",
+  "errors.update.check": "Couldn't check for updates",
+  "errors.update.install": "Couldn't install the update",
+  "errors.about.logs": "No log folder yet"
 }

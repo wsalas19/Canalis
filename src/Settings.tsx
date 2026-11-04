@@ -8,6 +8,8 @@ import { Settings, Palette, PanelTop, Monitor, Layers, Info } from "lucide-react
 import { WindowControls } from "./components/WindowControls";
 import {
   useSettings,
+  useFailedSaveCount,
+  retryFailedSettings,
   GeneralTab,
   AppearanceTab,
   NotchTab,
@@ -19,6 +21,7 @@ import {
 import type { SettingsTab } from "./settings/index";
 import { initTheme } from "./theme";
 import { useT } from "./i18n";
+import { InlineError } from "./components/InlineError";
 import "./Settings.css";
 
 const appWindow = getCurrentWebviewWindow();
@@ -36,6 +39,7 @@ function SettingsApp() {
   const t = useT();
   const [activeTab, setActiveTab] = useState<SettingsTab>("general");
   const settings = useSettings();
+  const failedSaveCount = useFailedSaveCount();
 
   useEffect(() => {
     return initTheme();
@@ -94,9 +98,17 @@ function SettingsApp() {
         </div>
 
         <div className="settings-content">
+          {failedSaveCount > 0 && (
+            <InlineError
+              message={t("errors.settings.saveFailed")}
+              onRetry={retryFailedSettings}
+              className="settings-save-error"
+            />
+          )}
           {activeTab === "general" && (
             <GeneralTab
               autostart={settings.autostart}
+              autostartError={settings.autostartError}
               toggleAutostart={settings.toggleAutostart}
               timeFormat24h={settings.timeFormat24h}
               toggleTimeFormat24h={settings.toggleTimeFormat24h}
@@ -272,8 +284,10 @@ function SettingsApp() {
               togglePrereleaseChannel={settings.togglePrereleaseChannel}
               updateStatus={settings.updateStatus}
               updateVersion={settings.updateVersion}
+              updateErrorKind={settings.updateErrorKind}
               checkForUpdates={settings.checkForUpdates}
               installUpdate={settings.installUpdate}
+              retryUpdate={settings.retryUpdate}
               exportStatus={settings.exportStatus}
               importStatus={settings.importStatus}
               handleExportSettings={settings.handleExportSettings}

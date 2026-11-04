@@ -568,24 +568,24 @@ pub fn open_dock_extra(target: String) -> Result<(), String> {
 }
 
 #[tauri::command]
-pub async fn open_app(app: AppHandle, app_name: String, args: Option<String>) {
+pub async fn open_app(app: AppHandle, app_name: String, args: Option<String>) -> Result<(), String> {
     if app_name == "start" {
         toggle_start_menu();
-        return;
+        return Ok(());
     }
 
     if app_name == "search" {
         tauri::async_runtime::spawn_blocking(|| send_win_chord(windows::Win32::UI::Input::KeyboardAndMouse::VK_S));
-        return;
+        return Ok(());
     }
 
     if app_name == "taskview" {
         tauri::async_runtime::spawn_blocking(|| send_win_chord(windows::Win32::UI::Input::KeyboardAndMouse::VK_TAB));
-        return;
+        return Ok(());
     }
 
     if app_name == "taskmgr" {
-        tauri::async_runtime::spawn_blocking(|| {
+        return tauri::async_runtime::spawn_blocking(|| {
             let root = std::env::var("SystemRoot").unwrap_or_else(|_| "C:\\Windows".to_string());
             let exe = format!("{root}\\System32\\Taskmgr.exe");
             let wide_exe: Vec<u16> = exe.encode_utf16().chain(std::iter::once(0)).collect();
@@ -602,30 +602,37 @@ pub async fn open_app(app: AppHandle, app_name: String, args: Option<String>) {
             };
             if res.0 as usize <= 32 {
                 crate::diagnostics::log(&format!("task manager failed to start: error {}", res.0 as usize));
+                return Err(format!("Task Manager failed to start (error {})", res.0 as usize));
             }
-        });
-        return;
+            Ok(())
+        })
+        .await
+        .map_err(|e| e.to_string())?;
     }
 
     if app_name == "nectar-settings" {
         open_settings_window(app);
-        return;
+        return Ok(());
     }
 
-    tauri::async_runtime::spawn_blocking(move || launch_path(&app_name, args.as_deref()));
+    tauri::async_runtime::spawn_blocking(move || launch_path(&app_name, args.as_deref()))
+        .await
+        .map_err(|e| e.to_string())?
 }
 
 /// Starts another instance of an app. Running PWAs go through their Start Menu
 /// shortcut so the new window belongs to the web app.
 #[tauri::command]
-pub async fn launch_new_instance(app_path: String, app_name: Option<String>, args: Option<String>) {
+pub async fn launch_new_instance(app_path: String, app_name: Option<String>, args: Option<String>) -> Result<(), String> {
     tauri::async_runtime::spawn_blocking(move || {
         if app_path == "start" {
-            return;
+            return Ok(());
         }
         let target = pwa_launch_target(&app_path, app_name.as_deref()).unwrap_or(app_path);
-        launch_path(&target, args.as_deref());
-    });
+        launch_path(&target, args.as_deref())
+    })
+    .await
+    .map_err(|e| e.to_string())?
 }
 
 /// Finds the Start Menu shortcut for a running PWA (same title, same browser).
@@ -673,7 +680,7 @@ fn gui_launcher_for(path: &str) -> Option<String> {
 }
 
 /// Opens a path, shortcut or shell app id through the shell.
-fn launch_path(path: &str, args: Option<&str>) {
+fn launch_path(path: &str, args: Option<&str>) -> Result<(), String> {
     unsafe {
         use windows::Win32::UI::Shell::ShellExecuteW;
         use windows::Win32::UI::WindowsAndMessaging::SW_SHOWNORMAL;
@@ -700,9 +707,10 @@ fn launch_path(path: &str, args: Option<&str>) {
                 SW_SHOWNORMAL,
             );
             if res.0 as usize <= 32 {
-                eprintln!("Failed to open {}: error code {}", target, res.0 as usize);
+                crate::diagnostics::log(&format!("Failed to open {target}: error code {}", res.0 as usize));
+                return Err(format!("Failed to open {target} (error {})", res.0 as usize));
             }
-            return;
+            return Ok(());
         }
 
         if let Some(uwp_cmd) = crate::commands::get_uwp_launch_cmd(path) {
@@ -718,9 +726,10 @@ fn launch_path(path: &str, args: Option<&str>) {
             );
             
             if res.0 as usize <= 32 {
-                eprintln!("Failed to open UWP app {}: error code {}", uwp_cmd, res.0 as usize);
+                crate::diagnostics::log(&format!("Failed to open UWP app {uwp_cmd}: error code {}", res.0 as usize));
+                return Err(format!("Failed to open {uwp_cmd} (error {})", res.0 as usize));
             }
-            return;
+            return Ok(());
         }
 
         use std::path::Path;
@@ -775,8 +784,10 @@ fn launch_path(path: &str, args: Option<&str>) {
         );
         
         if res.0 as usize <= 32 {
-            eprintln!("Failed to open app {}: error code {}", final_path, res.0 as usize);
+            crate::diagnostics::log(&format!("Failed to open app {final_path}: error code {}", res.0 as usize));
+            return Err(format!("Failed to open {final_path} (error {})", res.0 as usize));
         }
+        Ok(())
     }
 }
 
@@ -919,13 +930,16 @@ unsafe fn send_behind(hwnd: HWND) {
 }
 
 #[tauri::command]
-pub async fn focus_window(hwnd: isize) {
+pub async fn focus_window(hwnd: isize) -> Result<(), String> {
     if is_repeat_click(hwnd) {
-        return;
+        return Ok(());
     }
     tauri::async_runtime::spawn_blocking(move || unsafe {
-        use windows::Win32::UI::WindowsAndMessaging::{ShowWindow, SW_RESTORE, SW_SHOW, SW_MINIMIZE, IsIconic, IsWindowVisible, GetForegroundWindow, GetWindowThreadProcessId};
+        use windows::Win32::UI::WindowsAndMessaging::{ShowWindow, SW_RESTORE, SW_SHOW, SW_MINIMIZE, IsIconic, IsWindow, IsWindowVisible, GetForegroundWindow, GetWindowThreadProcessId};
         let hwnd = HWND(hwnd as *mut _);
+        if !IsWindow(Some(hwnd)).as_bool() {
+            return Err("That window no longer exists".to_string());
+        }
         let my_pid = std::process::id();
 
         let foreground_before = GetForegroundWindow();
@@ -996,25 +1010,29 @@ pub async fn focus_window(hwnd: isize) {
                 force_set_foreground(hwnd);
             }
         }
-    }).await.unwrap_or_default();
+        Ok(())
+    }).await.map_err(|e| e.to_string())?
 }
 
 /// Focuses one window of a multi-window item. hwnds are most recent first: if none is
 /// in front take the first, otherwise go to the next one so clicks cycle through all of them.
 #[tauri::command]
-pub async fn focus_app_windows(hwnds: Vec<isize>) {
+pub async fn focus_app_windows(hwnds: Vec<isize>) -> Result<(), String> {
+    if hwnds.is_empty() {
+        return Err("No windows to focus".to_string());
+    }
     if let Some(&first) = hwnds.first() {
         if is_repeat_click(first) {
-            return;
+            return Ok(());
         }
     }
     tauri::async_runtime::spawn_blocking(move || unsafe {
         use windows::Win32::UI::WindowsAndMessaging::{
-            GetForegroundWindow, IsIconic, IsWindowVisible, SetForegroundWindow, ShowWindow,
+            GetForegroundWindow, IsIconic, IsWindow, IsWindowVisible, SetForegroundWindow, ShowWindow,
             SW_RESTORE, SW_SHOW,
         };
         let Some(&most_recent) = hwnds.first() else {
-            return;
+            return Err("No windows to focus".to_string());
         };
         let foreground = GetForegroundWindow().0 as isize;
         let mut ring = hwnds.clone();
@@ -1025,6 +1043,9 @@ pub async fn focus_app_windows(hwnds: Vec<isize>) {
         };
 
         let hwnd = HWND(target as *mut _);
+        if !IsWindow(Some(hwnd)).as_bool() {
+            return Err("That window no longer exists".to_string());
+        }
         if !IsWindowVisible(hwnd).as_bool() {
             let _ = ShowWindow(hwnd, SW_SHOW);
         }
@@ -1032,9 +1053,10 @@ pub async fn focus_app_windows(hwnds: Vec<isize>) {
             let _ = ShowWindow(hwnd, SW_RESTORE);
         }
         let _ = SetForegroundWindow(hwnd);
+        Ok(())
     })
     .await
-    .unwrap_or_default();
+    .map_err(|e| e.to_string())?
 }
 
 fn get_cache_key(path: &str, name: Option<&str>) -> String {
@@ -2148,16 +2170,32 @@ pub fn select_media_session(id: Option<String>) {
 }
 
 #[tauri::command]
-pub fn media_play_pause() { crate::services::send_system_command(crate::types::SystemCommand::MediaPlayPause); crate::services::MEDIA_REFRESH.store(true, Ordering::Relaxed); }
+pub fn media_play_pause() -> Result<(), String> {
+    crate::services::try_send_system_command(crate::types::SystemCommand::MediaPlayPause)?;
+    crate::services::MEDIA_REFRESH.store(true, Ordering::Relaxed);
+    Ok(())
+}
 
 #[tauri::command]
-pub fn media_next() { crate::services::send_system_command(crate::types::SystemCommand::MediaNext); crate::services::MEDIA_REFRESH.store(true, Ordering::Relaxed); }
+pub fn media_next() -> Result<(), String> {
+    crate::services::try_send_system_command(crate::types::SystemCommand::MediaNext)?;
+    crate::services::MEDIA_REFRESH.store(true, Ordering::Relaxed);
+    Ok(())
+}
 
 #[tauri::command]
-pub fn media_previous() { crate::services::send_system_command(crate::types::SystemCommand::MediaPrevious); crate::services::MEDIA_REFRESH.store(true, Ordering::Relaxed); }
+pub fn media_previous() -> Result<(), String> {
+    crate::services::try_send_system_command(crate::types::SystemCommand::MediaPrevious)?;
+    crate::services::MEDIA_REFRESH.store(true, Ordering::Relaxed);
+    Ok(())
+}
 
 #[tauri::command]
-pub fn media_seek(position_ms: f64) { crate::services::send_system_command(crate::types::SystemCommand::MediaSeek(position_ms as i64)); crate::services::MEDIA_REFRESH.store(true, Ordering::Relaxed); }
+pub fn media_seek(position_ms: f64) -> Result<(), String> {
+    crate::services::try_send_system_command(crate::types::SystemCommand::MediaSeek(position_ms as i64))?;
+    crate::services::MEDIA_REFRESH.store(true, Ordering::Relaxed);
+    Ok(())
+}
 
 #[derive(serde::Serialize)]
 pub struct AppMediaSession {
@@ -2757,7 +2795,7 @@ fn kill_elevated(pid: u32) -> bool {
 }
 
 #[tauri::command]
-pub async fn end_task(hwnd: isize, all_hwnds: Option<Vec<isize>>) {
+pub async fn end_task(hwnd: isize, all_hwnds: Option<Vec<isize>>) -> Result<(), String> {
     use std::os::windows::process::CommandExt;
     use windows::Win32::UI::WindowsAndMessaging::{
         EnumChildWindows, GetWindowThreadProcessId, PostMessageW, WM_CLOSE,
@@ -2809,6 +2847,7 @@ pub async fn end_task(hwnd: isize, all_hwnds: Option<Vec<isize>>) {
         let own_pid = std::process::id();
         let mut by_pid: std::collections::BTreeMap<u32, Vec<isize>> = std::collections::BTreeMap::new();
         let mut politely = Vec::new();
+        let mut delivered = false;
         for h in handles {
             match app_pid(HWND(h as *mut _)) {
                 Some(pid) if pid != own_pid => by_pid.entry(pid).or_default().push(h),
@@ -2825,11 +2864,13 @@ pub async fn end_task(hwnd: isize, all_hwnds: Option<Vec<isize>>) {
                 .is_ok_and(|o| o.status.success());
             if killed {
                 crate::diagnostics::log(&format!("end task: taskkill ended pid {pid}"));
+                delivered = true;
                 continue;
             }
             match terminate_process(pid) {
                 Ok(()) => {
                     crate::diagnostics::log(&format!("end task: terminated pid {pid} directly"));
+                    delivered = true;
                     continue;
                 }
                 Err(denied) => {
@@ -2837,24 +2878,36 @@ pub async fn end_task(hwnd: isize, all_hwnds: Option<Vec<isize>>) {
                     if denied {
                         let asked = kill_elevated(pid);
                         crate::diagnostics::log(&format!("end task: elevation prompt for pid {pid} started: {asked}"));
+                        delivered |= asked;
                     }
                 }
             }
             politely.extend(hwnds);
         }
         for h in politely {
-            let _ = PostMessageW(Some(HWND(h as *mut _)), WM_CLOSE, windows::Win32::Foundation::WPARAM(0), windows::Win32::Foundation::LPARAM(0));
+            if PostMessageW(Some(HWND(h as *mut _)), WM_CLOSE, windows::Win32::Foundation::WPARAM(0), windows::Win32::Foundation::LPARAM(0)).is_ok() {
+                delivered = true;
+            }
         }
-    }).await.unwrap_or_default();
+        if delivered {
+            Ok(())
+        } else {
+            Err("Could not close the app".to_string())
+        }
+    }).await.map_err(|e| e.to_string())?
 }
 
 #[tauri::command]
-pub async fn close_window(hwnd: isize) {
+pub async fn close_window(hwnd: isize) -> Result<(), String> {
     tauri::async_runtime::spawn_blocking(move || unsafe {
-        use windows::Win32::UI::WindowsAndMessaging::{PostMessageW, WM_CLOSE};
+        use windows::Win32::UI::WindowsAndMessaging::{IsWindow, PostMessageW, WM_CLOSE};
         let hwnd = HWND(hwnd as *mut _);
-        let _ = PostMessageW(Some(hwnd), WM_CLOSE, windows::Win32::Foundation::WPARAM(0), windows::Win32::Foundation::LPARAM(0));
-    }).await.unwrap_or_default();
+        if !IsWindow(Some(hwnd)).as_bool() {
+            return Err("That window no longer exists".to_string());
+        }
+        PostMessageW(Some(hwnd), WM_CLOSE, windows::Win32::Foundation::WPARAM(0), windows::Win32::Foundation::LPARAM(0))
+            .map_err(|e| format!("Could not close the window: {e}"))
+    }).await.map_err(|e| e.to_string())?
 }
 
 fn re_register_appbars(app: &AppHandle, settings: &HashMap<String, serde_json::Value>) {

@@ -183,7 +183,7 @@ export function CompactMediaPlayer({
     // Update backend refs to the seek position so extrapolation continues from there
     backendPosRef.current = seekPos;
     backendTimeRef.current = Date.now();
-    invoke('media_seek', { positionMs: seekPos }).catch(() => {});
+    invoke('media_seek', { positionMs: seekPos }).catch((e) => console.warn('Seek failed:', e));
   }, [displayPosition]);
 
   const progressPercent = durationMs > 0 ? (displayPosition / durationMs) * 100 : 0;

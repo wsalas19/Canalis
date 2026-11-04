@@ -544,5 +544,20 @@
   "dockmenu.showDesktop": "Masaüstünü göster",
   "notch.ccSliders": "Kaydırıcılar",
   "cc.layout.volume": "Ses",
-  "cc.layout.brightness": "Parlaklık"
+  "cc.layout.brightness": "Parlaklık",
+  "common.retry": "Yeniden dene",
+  "errors.settings.saveFailed": "Bazı değişiklikler kaydedilemedi",
+  "errors.dock.savePinned": "Dock sırası kaydedilemedi",
+  "errors.dock.openApp": "{name} açılamadı veya öne getirilemedi",
+  "errors.dock.focusWindow": "O pencereye geçilemedi",
+  "errors.dock.newInstance": "{name} için yeni pencere açılamadı",
+  "errors.dock.endTask": "{name} kapatılamadı",
+  "errors.dock.closeWindow": "Pencere kapatılamadı",
+  "errors.processes.list": "Çalışan işlemler yüklenemedi",
+  "errors.processes.end": "{name} sonlandırılamadı",
+  "errors.drives": "Sürücüler yüklenemedi",
+  "errors.autostart": "Başlangıç ayarı değiştirilemedi",
+  "errors.update.check": "Güncellemeler denetlenemedi",
+  "errors.update.install": "Güncelleme yüklenemedi",
+  "errors.about.logs": "Henüz günlük klasörü yok"
 }

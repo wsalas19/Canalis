@@ -2,10 +2,12 @@ import { Power, Download, Clock, History, BatteryWarning, RefreshCw, LogOut, Lan
 import { SettingRow } from "./SettingRow";
 import { SettingSection } from "./SettingSection";
 import { Dropdown } from "./Dropdown";
+import { InlineError } from "../components/InlineError";
 import { LANGUAGES, getLanguagePreference, setLanguagePreference, useT } from "../i18n";
 
 interface GeneralTabProps {
   autostart: boolean;
+  autostartError: boolean;
   toggleAutostart: () => void;
   timeFormat24h: boolean;
   toggleTimeFormat24h: () => void;
@@ -22,6 +24,7 @@ interface GeneralTabProps {
 
 export function GeneralTab({
   autostart,
+  autostartError,
   toggleAutostart,
   timeFormat24h,
   toggleTimeFormat24h,
@@ -49,6 +52,10 @@ export function GeneralTab({
             <span className="slider"></span>
           </label>
         </SettingRow>
+
+        {autostartError && (
+          <InlineError message={t("errors.autostart")} onRetry={toggleAutostart} />
+        )}
 
         <SettingRow icon={Download} label={t("general.updateIndicator")} desc={t("general.updateIndicator.desc")}>
           <label className="toggle-switch">

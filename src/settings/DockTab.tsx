@@ -7,6 +7,7 @@ import { SettingSection } from "./SettingSection";
 import { Dropdown } from "./Dropdown";
 import type { MonitorInfo, MonitorMode } from "./types";
 import { usePerMonitor } from "./usePerMonitor";
+import { InlineError } from "../components/InlineError";
 import { useT } from "../i18n";
 
 const START_ICON_PRESETS = [
@@ -123,9 +124,20 @@ export function DockTab({
   const multiMonitor = dockMonitorMode === "all" && monitors.length > 1;
   const showPerMonitor = multiMonitor && perMonitor.enabled;
   const [drives, setDrives] = useState<DriveInfo[]>([]);
+  const [drivesError, setDrivesError] = useState(false);
+
+  const loadDrives = () => {
+    setDrivesError(false);
+    invoke<DriveInfo[]>("get_drives")
+      .then(setDrives)
+      .catch((e) => {
+        console.error("Failed to load drives:", e);
+        setDrivesError(true);
+      });
+  };
 
   useEffect(() => {
-    invoke<DriveInfo[]>("get_drives").then(setDrives).catch(() => {});
+    loadDrives();
   }, []);
 
   const handleStartIconUpload = (e: ChangeEvent<HTMLInputElement>) => {
@@ -275,6 +287,10 @@ export function DockTab({
                     <span className="slider"></span>
                   </label>
                 </SettingRow>
+
+                {drivesError && (
+                  <InlineError message={t("errors.drives")} onRetry={loadDrives} />
+                )}
 
                 {drives.map((d) => (
                   <SettingRow
