@@ -3354,6 +3354,11 @@ fn is_taskbar_candidate(ex_style: u32, has_owner: bool, is_explorer_special: boo
     true
 }
 
+/// Windows cannot report whether an app removed its own taskbar tab with
+/// ITaskbarList::DeleteTab: the window can still carry WS_EX_APPWINDOW.
+/// Keep a small explicit list for tray-only apps that do this.
+const SKIP_RUNNING_APPS: &[&str] = &["frieda-player.exe", "move mouse.exe", "openmouse-bridge.exe"];
+
 pub unsafe extern "system" fn enum_windows_proc(hwnd: HWND, lparam: LPARAM) -> BOOL {
     let apps = &mut *(lparam.0 as *mut Vec<AppInfo>);
 
@@ -3415,6 +3420,7 @@ pub unsafe extern "system" fn enum_windows_proc(hwnd: HWND, lparam: LPARAM) -> B
 
                     if (lowercase_path.contains("canalis.exe") && title != "Canalis Settings") ||
                        lowercase_path.contains("conhost.exe") ||
+                       SKIP_RUNNING_APPS.iter().any(|name| lowercase_path.ends_with(name)) ||
                        (lowercase_path.contains("explorer.exe") && !is_explorer_window) ||
                        lowercase_path.contains("shellexperiencehost.exe") ||
                        lowercase_path.contains("searchhost.exe") ||

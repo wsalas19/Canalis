@@ -352,6 +352,12 @@ pub fn open_native_tray(anchor: Option<(i32, i32)>) {
             crate::state::NATIVE_TASKBAR_HIDDEN.store(true, Ordering::SeqCst);
         }
     }
+    // The taskbar's auto-hide chevron can reappear over the dock and show the
+    // native "Show hidden icons" tooltip. Park the taskbar again after closing.
+    if hidden || crate::state::NATIVE_TASKBAR_HIDDEN.load(Ordering::SeqCst) {
+        crate::utils::set_taskbar_visibility(false, false);
+        crate::state::NATIVE_TASKBAR_HIDDEN.store(true, Ordering::SeqCst);
+    }
     hide_tray_tooltips();
 }
 
