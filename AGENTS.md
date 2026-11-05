@@ -215,8 +215,11 @@ artifact exists only for the updater. The Release workflow is manual
 - Rust window filtering appears in `services.rs`; app-install scanning also exists
   in `commands.rs`. Check both before changing dedup.
 - `tray_icons.rs` re-parks the native taskbar and cleans up tray tooltips after
-  the native flyout. The native “Show hidden icons” tooltip is a known parked
-  issue: reproduce before changing it.
+  the native flyout. The first tray click relies on `warm_up()` focusing the
+  chevron while the taskbar is still visible; UI Automation must be warm before
+  the dock hides it, otherwise the `Win+B` fallback rings the first icon. On
+  Windows 11 the chevron tooltip is a `Xaml_WindowedPopupClass|PopupHost` window,
+  not `tooltips_class32`.
 - `services.rs` has a small `SKIP_RUNNING_APPS` list because apps using
   `ITaskbarList::DeleteTab` keep `WS_EX_APPWINDOW` and cannot be detected from
   window styles. Extend the list only with a clear reason.

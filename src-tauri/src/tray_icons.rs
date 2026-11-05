@@ -10,7 +10,7 @@ use windows::Win32::UI::Accessibility::{
     UIA_InvokePatternId,
 };
 use windows::Win32::UI::WindowsAndMessaging::{
-    FindWindowA, GetAncestor, GetClassNameA, GetCursorPos, GetForegroundWindow, GetWindow, GetWindowLongA, GetWindowRect, GetWindowThreadProcessId, IsWindowVisible, SetForegroundWindow,
+    FindWindowA, GetAncestor, GetClassNameA, GetCursorPos, GetForegroundWindow, GetWindow, GetWindowLongA, GetWindowRect, GetWindowTextW, GetWindowThreadProcessId, IsWindowVisible, SetForegroundWindow,
     SetLayeredWindowAttributes, SetWindowLongA, SetWindowPos, ShowWindow, EnumWindows, GA_ROOT, GWL_EXSTYLE, GW_OWNER, HWND_TOPMOST, LWA_ALPHA,
     SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOSIZE, SWP_SHOWWINDOW, SW_HIDE, SW_SHOWNA, WS_EX_LAYERED, WS_EX_TRANSPARENT,
 };
@@ -105,8 +105,17 @@ fn class_name(hwnd: HWND) -> String {
 }
 
 struct TooltipScan {
+    /// Thread that owns Shell_TrayWnd. Explorer shares its process with the
+    /// File Explorer windows, so match the thread, not just the process.
+    tray_thread: u32,
     tray_pid: u32,
     hidden: u32,
+}
+
+fn window_title(hwnd: HWND) -> String {
+    let mut buf = [0u16; 128];
+    let len = unsafe { GetWindowTextW(hwnd, &mut buf) };
+    String::from_utf16_lossy(&buf[..len.max(0) as usize])
 }
 
 unsafe extern "system" fn hide_tooltip_proc(hwnd: HWND, lparam: LPARAM) -> BOOL {
@@ -115,17 +124,34 @@ unsafe extern "system" fn hide_tooltip_proc(hwnd: HWND, lparam: LPARAM) -> BOOL 
         return BOOL(1);
     }
     let class = class_name(hwnd);
-    if class != "tooltips_class32" {
+    let legacy_tip = class == "tooltips_class32";
+    // Windows 11 renders the notification chevron tooltip as a XAML popup host.
+    let xaml_tip = class == "Xaml_WindowedPopupClass" && window_title(hwnd) == "PopupHost";
+    if !legacy_tip && !xaml_tip {
         return BOOL(1);
+    }
+    if xaml_tip {
+        let mut rect = RECT::default();
+        let _ = GetWindowRect(hwnd, &mut rect);
+        let mut mi = MONITORINFO { cbSize: std::mem::size_of::<MONITORINFO>() as u32, ..Default::default() };
+        let _ = GetMonitorInfoW(MonitorFromPoint(POINT { x: rect.left, y: rect.top }, MONITOR_DEFAULTTONEAREST), &mut mi);
+        // Only the lower half of a monitor can hold a tray tooltip; leave
+        // unrelated XAML popups (menus, flyouts) alone.
+        if rect.top < mi.rcWork.top + (mi.rcWork.bottom - mi.rcWork.top) / 2 {
+            return BOOL(1);
+        }
     }
     let owner = GetWindow(hwnd, GW_OWNER).unwrap_or_default();
     let root = if owner.0.is_null() { owner } else { GetAncestor(owner, GA_ROOT) };
     let root = if root.0.is_null() { owner } else { root };
     let owner_is_tray = matches!(class_name(root).as_str(), "Shell_TrayWnd" | "Shell_SecondaryTrayWnd");
     let mut pid = 0u32;
-    GetWindowThreadProcessId(hwnd, Some(&mut pid));
+    let thread = GetWindowThreadProcessId(hwnd, Some(&mut pid));
     // Bare tooltips created on the taskbar thread have no owner, so match that too.
-    if owner_is_tray || (scan.tray_pid != 0 && pid == scan.tray_pid) {
+    let tray_owned = owner_is_tray
+        || (scan.tray_thread != 0 && thread == scan.tray_thread)
+        || (xaml_tip && scan.tray_pid != 0 && pid == scan.tray_pid);
+    if tray_owned {
         let _ = ShowWindow(hwnd, SW_HIDE);
         scan.hidden += 1;
     }
@@ -133,20 +159,57 @@ unsafe extern "system" fn hide_tooltip_proc(hwnd: HWND, lparam: LPARAM) -> BOOL 
 }
 
 fn hide_tray_tooltips() {
-    let tray_pid = find_window(c"Shell_TrayWnd")
+    let (tray_thread, tray_pid) = find_window(c"Shell_TrayWnd")
         .map(|tray| {
             let mut pid = 0u32;
-            unsafe { GetWindowThreadProcessId(tray, Some(&mut pid)) };
-            pid
+            let thread = unsafe { GetWindowThreadProcessId(tray, Some(&mut pid)) };
+            (thread, pid)
         })
-        .unwrap_or(0);
-    let mut scan = TooltipScan { tray_pid, hidden: 0 };
+        .unwrap_or((0, 0));
+    let mut scan = TooltipScan { tray_thread, tray_pid, hidden: 0 };
     unsafe {
         let _ = EnumWindows(Some(hide_tooltip_proc), LPARAM(&mut scan as *mut TooltipScan as isize));
     }
     if scan.hidden > 0 {
         crate::diagnostics::log(&format!("tray: hid {} tray tooltip window(s)", scan.hidden));
     }
+}
+
+/// The shell re-shows the chevron tooltip a beat after the flyout closes, when
+/// keyboard focus returns to the notification area, so a single sweep misses it.
+/// Keep sweeping briefly; the tooltip is a separate top-level window that would
+/// otherwise stay parked over the dock. Only one sweep runs at a time, so a
+/// taskbar peek during this window is already covered.
+static TOOLTIP_SWEEP_ACTIVE: AtomicBool = AtomicBool::new(false);
+
+fn sweep_tray_tooltips(millis: u64) {
+    if TOOLTIP_SWEEP_ACTIVE.swap(true, Ordering::SeqCst) {
+        return;
+    }
+    std::thread::spawn(move || {
+        let deadline = std::time::Instant::now() + std::time::Duration::from_millis(millis);
+        while std::time::Instant::now() < deadline {
+            // A new flyout owns its own tooltips; leave those alone.
+            if FLYOUT_OPEN.load(Ordering::SeqCst)
+                || find_overflow_window().is_some_and(|w| unsafe { IsWindowVisible(w) }.as_bool())
+            {
+                break;
+            }
+            hide_tray_tooltips();
+            std::thread::sleep(std::time::Duration::from_millis(100));
+        }
+        TOOLTIP_SWEEP_ACTIVE.store(false, Ordering::SeqCst);
+    });
+}
+
+fn sweep_tray_tooltips_after_close() {
+    sweep_tray_tooltips(5000);
+}
+
+/// A hidden taskbar can still peek from its auto-hide edge, and the focused
+/// notification chevron then shows its tooltip over the dock.
+pub fn sweep_tray_tooltips_after_peek() {
+    sweep_tray_tooltips(1500);
 }
 
 fn taskbar_has_focus() -> bool {
@@ -234,14 +297,42 @@ fn place_flyout(flyout: HWND, anchor: Option<(i32, i32)>) {
     }
 }
 
+fn dock_replaces_taskbar() -> bool {
+    let Some(cache) = crate::state::SETTINGS_CACHE.get() else { return true };
+    let Ok(settings) = cache.lock() else { return true };
+    let legacy = settings.get("nectar-legacy-mode").and_then(|v| v.as_str()) == Some("true");
+    let dock = settings.get("nectar-dock-enabled").and_then(|v| v.as_str()) != Some("false");
+    !legacy && dock
+}
+
 pub fn warm_up() {
     unsafe {
         let _ = CoInitializeEx(None, COINIT_MULTITHREADED);
     }
     let Ok(_guard) = AUTOMATION_LOCK.try_lock() else { return };
     let (Ok(tray), Ok(auto)) = (find_window(c"Shell_TrayWnd"), automation()) else { return };
+    let hides_taskbar = dock_replaces_taskbar();
     if let Ok(root) = unsafe { auto.ElementFromHandle(tray) } {
-        let _ = find_show_hidden_icons_button(&auto, &root);
+        match find_show_hidden_icons_button(&auto, &root) {
+            Some(button) => {
+                // Focusing the chevron once while the taskbar is still visible
+                // makes the shell realize its XAML tray tree. The tree then stays
+                // queryable after the dock hides the taskbar.
+                let previous = unsafe { GetForegroundWindow() };
+                let focused = hides_taskbar && unsafe { button.SetFocus() }.is_ok();
+                crate::diagnostics::log(&format!("tray: warm-up found chevron=true focused={focused}"));
+                if focused {
+                    // Hand focus straight back so the focus ring does not linger
+                    // on the native taskbar while the splash is up.
+                    if !previous.0.is_null() {
+                        unsafe { let _ = SetForegroundWindow(previous); }
+                    }
+                    hide_tray_tooltips();
+                    sweep_tray_tooltips_after_peek();
+                }
+            }
+            None => crate::diagnostics::log("tray: warm-up found chevron=false"),
+        }
     }
 }
 
@@ -260,6 +351,7 @@ pub fn open_native_tray(anchor: Option<(i32, i32)>) {
         }
         hide_tray_tooltips();
         FLYOUT_OPEN.store(false, Ordering::SeqCst);
+        sweep_tray_tooltips_after_close();
         return;
     }
     let Ok(_guard) = AUTOMATION_LOCK.try_lock() else {
@@ -285,16 +377,18 @@ pub fn open_native_tray(anchor: Option<(i32, i32)>) {
     }
 
     let mut opened = false;
-    if !hidden {
-        if let Ok(auto) = automation() {
-            if let Ok(root) = unsafe { auto.ElementFromHandle(tray) } {
-                let button = find_show_hidden_icons_button(&auto, &root);
-                if button.is_none() {
-                    crate::diagnostics::log(&format!("tray: hidden icons button not found: {}", describe_elements(&auto, &root)));
-                }
-                if let Some(button) = button {
+    // Invoke the chevron directly whenever possible. The Win+B fallback gives
+    // the taskbar keyboard focus, which rings the first tray icon and makes the
+    // shell show the "Show hidden icons" tooltip. After showing a hidden
+    // taskbar, its XAML tree can take a few frames to populate.
+    let attempts = if hidden { 15 } else { 1 };
+    if let Ok(auto) = automation() {
+        if let Ok(root) = unsafe { auto.ElementFromHandle(tray) } {
+            for attempt in 0..attempts {
+                if let Some(button) = find_show_hidden_icons_button(&auto, &root) {
                     if invoke_element(&button) {
                         opened = true;
+                        crate::diagnostics::log(&format!("tray: uia invoke opened (attempt {attempt})"));
                         for _ in 0..40 {
                             if let Some(flyout) = find_overflow_window() {
                                 if unsafe { IsWindowVisible(flyout) }.as_bool() {
@@ -304,8 +398,18 @@ pub fn open_native_tray(anchor: Option<(i32, i32)>) {
                             }
                             std::thread::sleep(std::time::Duration::from_millis(5));
                         }
+                        break;
                     }
                 }
+                if attempt + 1 < attempts {
+                    std::thread::sleep(std::time::Duration::from_millis(20));
+                }
+            }
+            if !opened {
+                crate::diagnostics::log(&format!(
+                    "tray: uia could not open (hidden={hidden}): {}",
+                    describe_elements(&auto, &root)
+                ));
             }
         }
     }
@@ -359,6 +463,7 @@ pub fn open_native_tray(anchor: Option<(i32, i32)>) {
         crate::state::NATIVE_TASKBAR_HIDDEN.store(true, Ordering::SeqCst);
     }
     hide_tray_tooltips();
+    sweep_tray_tooltips_after_close();
 }
 
 fn all_taskbars() -> Vec<HWND> {

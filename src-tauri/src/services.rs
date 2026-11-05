@@ -632,6 +632,9 @@ unsafe extern "system" fn taskbar_event_proc(
         if class_str == "Shell_TrayWnd" || class_str == "Shell_SecondaryTrayWnd" {
             // Taskbar is trying to show or move: slap it back down.
             set_taskbar_visibility(false, false);
+            // A peek can also pop the chevron tooltip; clear it once the
+            // taskbar is hidden again.
+            crate::tray_icons::sweep_tray_tooltips_after_peek();
         }
     }
 }

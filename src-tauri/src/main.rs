@@ -440,7 +440,11 @@ fn main() {
                 use tauri::menu::{Menu, MenuItem};
                 use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
                 std::thread::spawn(|| {
-                    std::thread::sleep(std::time::Duration::from_secs(5));
+                    // Warm UI Automation while the taskbar is still visible (the
+                    // dock hides it after the splash). Once its provider has seen
+                    // the taskbar, the chevron stays queryable while hidden, so the
+                    // first tray click does not need the Win+B keyboard fallback.
+                    std::thread::sleep(std::time::Duration::from_millis(1000));
                     crate::tray_icons::warm_up();
                 });
                 let handle = app.handle();
