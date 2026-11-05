@@ -2298,7 +2298,13 @@ img {
 .cv-link, .cv-action { border: 0; background: none; font-size: var(--text-caption); color: var(--nectar-text, rgba(255, 255, 255, 0.55)); cursor: pointer; padding: 2px 4px; border-radius: 6px; }
 .cv-link:hover, .cv-action:hover { background: var(--nectar-group-bg, rgba(255, 255, 255, 0.1)); }
 .cv-action.danger { color: #ff6b6b; }
-.cv-list { flex: 1; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 3px; scrollbar-width: thin; }
+.cv-list { flex: 1; min-height: 0; overflow-y: auto; scrollbar-gutter: stable; display: flex; flex-direction: column; gap: 3px; }
+.cv-list::-webkit-scrollbar { width: 6px; }
+.cv-list::-webkit-scrollbar-track { background: transparent; margin: 2px 0; }
+.cv-list::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.28); border-radius: 999px; }
+.cv-list::-webkit-scrollbar-thumb:hover { background: rgba(255, 255, 255, 0.45); }
+.light-mode .cv-list::-webkit-scrollbar-thumb { background: rgba(0, 0, 0, 0.25); }
+.light-mode .cv-list::-webkit-scrollbar-thumb:hover { background: rgba(0, 0, 0, 0.4); }
 .cv-row { display: flex; align-items: center; gap: 8px; padding: 5px 8px; border-radius: 8px; background: var(--nectar-group-bg, rgba(255, 255, 255, 0.04)); cursor: pointer; flex-shrink: 0; font-size: var(--text-body-sm); color: var(--nectar-text, rgba(255, 255, 255, 0.9)); }
 .cv-row:hover { background: var(--nectar-border, rgba(255, 255, 255, 0.09)); }
 .cv-row.connected { outline: 1px solid var(--nectar-border, rgba(255, 255, 255, 0.25)); }

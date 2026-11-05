@@ -1077,7 +1077,9 @@ function AppNotch() {
   const wheelConsumedRef = useRef(false);
   const wheelIdleTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const WHEEL_STEP_THRESHOLD = 100;
-  const WHEEL_GESTURE_IDLE_MS = 260;
+  // One block per wheel gesture: short enough to stay fluid, long enough that
+  // the step is still deliberate.
+  const WHEEL_GESTURE_IDLE_MS = 180;
 
   useEffect(() => {
     return () => {
@@ -1113,6 +1115,13 @@ function AppNotch() {
       target.closest('.cal-scroll') ||
       target.closest('.weather-panel')
     ) {
+      return;
+    }
+
+    // A scrollable connection list owns the wheel; otherwise the notch would
+    // switch blocks instead of letting the list scroll.
+    const connectionsList = target.closest('.cv-list') as HTMLElement | null;
+    if (connectionsList && connectionsList.scrollHeight > connectionsList.clientHeight + 1) {
       return;
     }
 
