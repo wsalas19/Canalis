@@ -399,6 +399,7 @@
   "overlay.update.checking": "Güncellemeler denetleniyor...",
   "overlay.update.downloading": "Güncelleme indiriliyor... %{percent}",
   "overlay.update.installing": "Güncelleme yükleniyor...",
+  "overlay.starting": "Başlatılıyor",
   "dockmenu.iconError": "Simge ayarlanamadı",
   "dockmenu.start": "Başlat",
   "dockmenu.search": "Ara",

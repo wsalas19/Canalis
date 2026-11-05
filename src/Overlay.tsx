@@ -569,6 +569,7 @@ function OverlayApp() {
 
   type Mode = 'idle' | 'volume' | 'brightness' | 'splash' | 'updating';
   const [mode, setMode] = useState<Mode>('idle');
+  const [appVersion, setAppVersion] = useState(() => localStorage.getItem("nectar-app-version") || "");
   const [updateStatus, setUpdateStatus] = useState<string>('checking');
   const [updateProgress, setUpdateProgress] = useState(0);
 
@@ -647,9 +648,14 @@ function OverlayApp() {
       setMode('splash');
     };
     setTimeout(() => onSplashCompleteRef.current(), 5500);
+    // Static pane: hold it just long enough to mask the boot, then hand off.
+    setTimeout(() => onSplashCompleteRef.current(), 3200);
 
     showSplash();
-    getVersion().then((v) => localStorage.setItem("nectar-app-version", v)).catch(() => {});
+    getVersion().then((v) => {
+      localStorage.setItem("nectar-app-version", v);
+      setAppVersion(v);
+    }).catch(() => {});
   }, []);
 
   const onSplashComplete = useCallback(() => {
@@ -875,27 +881,23 @@ function OverlayApp() {
         {mode === 'splash' && (
           <motion.div
             className="splash-screen"
-            initial={{ opacity: 1 }}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            transition={{ duration: 0.3 }}
+            transition={{ duration: 0.2 }}
           >
-            <motion.img
-              src="/canalis.png"
-              className="splash-logo"
-              draggable={false}
-              initial={{ scale: 0, opacity: 0, rotate: 0 }}
-              animate={{
-                scale: [0, 1.1, 1, 1.2, 1, 1, 0.2],
-                opacity: [0, 1, 1, 1, 1, 1, 0],
-                rotate: [0, 0, 0, 0, 0, 540, 1080],
-              }}
-              transition={{
-                duration: 3.2,
-                times: [0, 0.17, 0.3, 0.43, 0.56, 0.78, 1],
-                ease: ["easeOut", "easeInOut", "easeInOut", "easeInOut", "linear", "linear"],
-              }}
-              onAnimationComplete={onSplashComplete}
-            />
+            <div className="splash-pane">
+              <img
+                src="/canalis.png"
+                className="splash-logo"
+                alt="Canalis"
+                draggable={false}
+              />
+              {/* Always render the line so the pane height never shifts while
+                  the version resolves. */}
+              <span className="splash-version">{appVersion ? `v${appVersion}` : "\u00A0"}</span>
+              <span className="splash-status">{t("overlay.starting")}</span>
+            </div>
           </motion.div>
         )}
       </AnimatePresence>

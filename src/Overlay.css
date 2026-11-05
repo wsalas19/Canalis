@@ -47,10 +47,54 @@ body,
     z-index: 9999;
 }
 
+/* Small static pane on the shared app surface: logo, version, pulsing status. */
+.splash-pane {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    width: 200px;
+    padding: 30px 24px 26px;
+    border-radius: 22px;
+    background: var(--nectar-bg-expanded, rgba(0, 0, 0, 0.92));
+    border: 1px solid var(--nectar-border, rgba(255, 255, 255, 0.1));
+    box-shadow: 0 30px 70px rgba(0, 0, 0, 0.45);
+    backdrop-filter: blur(24px);
+    color: var(--nectar-text, #ffffff);
+    font-family: var(--nectar-font, "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif);
+    text-align: center;
+}
+
 .splash-logo {
-    width: 120px;
-    height: 120px;
+    width: 64px;
+    height: 64px;
     object-fit: contain;
+}
+
+.splash-version {
+    margin-top: 10px;
+    color: var(--nectar-text-muted, rgba(255, 255, 255, 0.6));
+    font-size: var(--text-caption-strong);
+    font-weight: 500;
+    letter-spacing: 0.04em;
+    font-variant-numeric: tabular-nums;
+}
+
+.splash-status {
+    margin-top: 18px;
+    font-size: var(--text-body);
+    font-weight: 500;
+    animation: splash-pulse 1.6s ease-in-out infinite;
+}
+
+@keyframes splash-pulse {
+    0%,
+    100% {
+        opacity: 0.35;
+    }
+    50% {
+        opacity: 1;
+    }
 }
 
 /* ─── Auto-Update Splash ─────────────────────────────────────────────────── */

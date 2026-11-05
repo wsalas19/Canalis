@@ -399,6 +399,7 @@
   "overlay.update.checking": "Checking for updates...",
   "overlay.update.downloading": "Downloading update... {percent}%",
   "overlay.update.installing": "Installing update...",
+  "overlay.starting": "Starting",
   "dockmenu.iconError": "Failed to set icon",
   "dockmenu.start": "Start",
   "dockmenu.search": "Search",
