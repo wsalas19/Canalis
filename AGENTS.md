@@ -199,8 +199,11 @@ bun run bump <major.minor.patch>
 Release artifacts and identity are documented in `FORK.md`. The signed updater
 endpoint and public key live in `src-tauri/tauri.conf.json`; the private key is
 outside the repo. The custom installer lives in `installer-app/`; the NSIS
-artifact exists only for the updater. The Release workflow is manual
-(`workflow_dispatch`): run it with a `v*` tag selected.
+artifact exists only for the updater. The Release workflow runs automatically
+when a `v*` tag is pushed (`push.tags`), and can also be dispatched manually
+with a `v*` tag selected. It refuses to run from a branch and fails if any
+version file does not match the tag, so always `bun run bump <version>` and
+commit before tagging.
 
 ## Gotchas / known state
 

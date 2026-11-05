@@ -1,6 +1,11 @@
 name: Release
 
 on:
+  # Pushing a v* tag starts the release on its own. The job still verifies
+  # GITHUB_REF_TYPE == "tag" and that every version file matches the tag.
+  push:
+    tags:
+      - "v*"
   workflow_dispatch:
 
 jobs:
