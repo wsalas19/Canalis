@@ -1,6 +1,6 @@
 [package]
 name = "canalis-installer"
-version = "2.0.0"
+version = "2.0.1"
 description = "Canalis installer"
 authors = ["kua8", "wsalas19"]
 edition = "2021"
