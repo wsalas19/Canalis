@@ -174,6 +174,8 @@ fn main() {
             shelf_text_file,
             pointer_over_notch,
             open_settings_window,
+            open_settings_tab,
+            take_pending_settings_tab,
             open_calendar_window,
             open_tray_window,
             open_tray_at_cursor,
@@ -402,40 +404,6 @@ fn main() {
                 }
             }
 
-            if let Some(settings_win) = app.get_webview_window("settings") {
-                #[cfg(target_os = "windows")]
-                {
-                    let _ = window_vibrancy::apply_acrylic(&settings_win, Some((0, 0, 0, 20)));
-                }
-                if let Ok(hwnd) = settings_win.hwnd() {
-                    crate::active_look::keep_active_look(hwnd);
-                    crate::services::set_os_rounding(hwnd);
-                }
-                let win_clone = settings_win.clone();
-                settings_win.on_window_event(move |event| {
-                    if let tauri::WindowEvent::CloseRequested { api, .. } = event {
-                        api.prevent_close();
-                        let _ = win_clone.hide();
-                    }
-                });
-            }
-            if let Some(calendar_win) = app.get_webview_window("calendar") {
-                #[cfg(target_os = "windows")]
-                {
-                    let _ = window_vibrancy::apply_acrylic(&calendar_win, Some((0, 0, 0, 20)));
-                }
-                if let Ok(hwnd) = calendar_win.hwnd() {
-                    crate::active_look::keep_active_look(hwnd);
-                    crate::services::set_os_rounding(hwnd);
-                }
-                let win_clone = calendar_win.clone();
-                calendar_win.on_window_event(move |event| {
-                    if let tauri::WindowEvent::CloseRequested { api, .. } = event {
-                        api.prevent_close();
-                        let _ = win_clone.hide();
-                    }
-                });
-            }
             {
                 use tauri::menu::{Menu, MenuItem};
                 use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};

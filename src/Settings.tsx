@@ -35,9 +35,38 @@ const TABS: { id: SettingsTab; labelKey: string; icon: typeof Settings }[] = [
   { id: "about", labelKey: "tabs.about", icon: Info },
 ];
 
+const TAB_KEY = "nectar-settings-tab";
+
+function remember(key: string, value: string) {
+  try {
+    localStorage.setItem(key, value);
+  } catch {
+    return;
+  }
+}
+
+function parseTab(value: string | null): SettingsTab | null {
+  if (!value) return null;
+  if (value === "calendar-sync") return value;
+  const known = TABS.find((tab) => tab.id === value);
+  return known ? known.id : null;
+}
+
+function readTab(): SettingsTab {
+  try {
+    return parseTab(localStorage.getItem(TAB_KEY)) ?? "general";
+  } catch {
+    return "general";
+  }
+}
+
 function SettingsApp() {
   const t = useT();
-  const [activeTab, setActiveTab] = useState<SettingsTab>("general");
+  const [activeTab, setActiveTabState] = useState<SettingsTab>(readTab);
+  const setActiveTab = (next: SettingsTab) => {
+    setActiveTabState(next);
+    remember(TAB_KEY, next);
+  };
   const settings = useSettings();
   const failedSaveCount = useFailedSaveCount();
 
@@ -52,6 +81,17 @@ function SettingsApp() {
     return () => {
       unlisten.then((fn) => fn());
     };
+  }, []);
+
+  // The window is created on demand, so a navigation request made before it
+  // existed is parked in Rust and collected here on mount.
+  useEffect(() => {
+    invoke<string | null>("take_pending_settings_tab")
+      .then((tab) => {
+        const parsed = parseTab(tab);
+        if (parsed) setActiveTab(parsed);
+      })
+      .catch(() => {});
   }, []);
 
   useEffect(() => {

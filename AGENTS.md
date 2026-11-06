@@ -33,7 +33,10 @@ find the owning module before inspecting large files.
 | `overlay` | `overlay.html` | `src/Overlay.tsx` (self-mounts) | `src/Overlay.tsx`, `src/Overlay.css` |
 | `dock`, `dock-<monitor>` | `dock.html` | `src/dock-main.tsx` → `Dock` | `src/Dock.tsx`, `src/Dock.css` |
 
-Window labels, URLs and geometry live in `src-tauri/tauri.conf.json`.
+Window labels, URLs and geometry live in `src-tauri/tauri.conf.json`, except
+`settings` and `calendar`: those are created lazily on first open by
+`ensure_settings_window` / `ensure_calendar_window` in `commands.rs` (their
+geometry lives there) and reaped 5 minutes after being hidden.
 Runtime sizing/positioning and per-monitor windows are owned by
 `src-tauri/src/commands.rs`, `src-tauri/src/monitors.rs` and
 `src-tauri/src/services.rs`; the notch cannot resize itself from React.

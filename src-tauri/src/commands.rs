@@ -2020,6 +2020,185 @@ pub fn hide_native_osd() {
     }
 }
 
+// --- Lazily created auxiliary windows (settings / calendar) -----------------
+//
+// `settings` and `calendar` are no longer declared in tauri.conf.json. They are
+// built on demand from `ensure_*` and reaped after being hidden for a while, so
+// startup no longer pays for two idle webviews.
+//
+// Creation runs on the async runtime (same pattern as
+// `services::create_monitor_window`) because `ensure_*` can be called from the
+// tray handler and the single-instance thread, which are not the main thread.
+// Tauri marshals the actual native window creation internally, so building off
+// the main thread here is safe.
+
+/// Idle timeout before a hidden settings/calendar window is destroyed.
+const AUXILIARY_WINDOW_IDLE_SECS: u64 = 300;
+
+/// Bumped on every close request and on every reopen, so a pending reaper from
+/// an earlier close cannot destroy a window that has since been reopened.
+static SETTINGS_GEN: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+static CALENDAR_GEN: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+
+/// Guards so two concurrent callers cannot build the same window twice.
+static SETTINGS_CREATING: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+static CALENDAR_CREATING: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+/// Tab requested before the settings window existed. Taken by the window on mount.
+static PENDING_SETTINGS_TAB: std::sync::Mutex<Option<String>> = std::sync::Mutex::new(None);
+
+/// Builds an auxiliary window on the async runtime, reproducing the flags that
+/// used to live in tauri.conf.json, wires the acrylic/rounding look and hides
+/// (instead of closing) on close, scheduling a reaper.
+fn create_auxiliary_window(
+    app: &AppHandle,
+    label: &'static str,
+    title: &str,
+    url: &str,
+    width: f64,
+    height: f64,
+    min_width: f64,
+    min_height: f64,
+    creating: &'static std::sync::atomic::AtomicBool,
+    gen: &'static std::sync::atomic::AtomicU64,
+) {
+    let app = app.clone();
+    let title = title.to_string();
+    let url = url.to_string();
+
+    tauri::async_runtime::spawn(async move {
+        // The window is built hidden and revealed on its first page load, so the
+        // initial open does not flash an empty transparent frame while the
+        // webview boots. Only the first load reveals it: dev-server reloads must
+        // not keep yanking the window to the front.
+        let revealed = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+        let load_revealed = revealed.clone();
+        let load_app = app.clone();
+        let built = tauri::WebviewWindowBuilder::new(
+            &app,
+            label,
+            tauri::WebviewUrl::App(url.into()),
+        )
+        .title(title)
+        .inner_size(width, height)
+        .min_inner_size(min_width, min_height)
+        .decorations(false)
+        .transparent(true)
+        .resizable(true)
+        .maximizable(true)
+        .minimizable(true)
+        .closable(false)
+        .always_on_top(false)
+        .visible_on_all_workspaces(false)
+        .focused(true)
+        .skip_taskbar(false)
+        .shadow(false)
+        .visible(false)
+        .center()
+        .on_page_load(move |_, payload| {
+            if payload.event() == tauri::webview::PageLoadEvent::Finished
+                && !load_revealed.swap(true, Ordering::AcqRel)
+            {
+                bring_window_to_front(&load_app, label);
+            }
+        })
+        .build();
+
+        let win = match built {
+            Ok(w) => w,
+            Err(_) => {
+                // Release the guard so a later call can retry the build.
+                creating.store(false, Ordering::Release);
+                return;
+            }
+        };
+
+        #[cfg(target_os = "windows")]
+        {
+            let _ = window_vibrancy::apply_acrylic(&win, Some((0, 0, 0, 20)));
+        }
+        if let Ok(hwnd) = win.hwnd() {
+            crate::active_look::keep_active_look(hwnd);
+            crate::services::set_os_rounding(hwnd);
+        }
+
+        // Hide instead of closing; reap the window once it has stayed hidden for
+        // the idle timeout. Events are per-window so no polling loop is needed.
+        let event_win = win.clone();
+        let event_app = app.clone();
+        win.on_window_event(move |event| {
+            if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+                api.prevent_close();
+                let _ = event_win.hide();
+                let my_gen = gen.fetch_add(1, Ordering::AcqRel) + 1;
+                let reap_app = event_app.clone();
+                tauri::async_runtime::spawn(async move {
+                    tokio::time::sleep(std::time::Duration::from_secs(AUXILIARY_WINDOW_IDLE_SECS)).await;
+                    // Skip if the window was reopened (gen moved on) or is visible.
+                    if gen.load(Ordering::Acquire) == my_gen {
+                        if let Some(w) = reap_app.get_webview_window(label) {
+                            if !w.is_visible().unwrap_or(false) {
+                                let _ = w.destroy();
+                            }
+                        }
+                    }
+                });
+            }
+        });
+
+        // Same crash recovery as the windows that exist at startup.
+        crate::services::watch_webview_window(&app, &win);
+
+        // Fallback: if the page never reports a load (dev server hiccup, renderer
+        // failure), still reveal the window rather than leave it invisible.
+        let fallback_app = app.clone();
+        tauri::async_runtime::spawn(async move {
+            tokio::time::sleep(std::time::Duration::from_secs(3)).await;
+            if let Some(w) = fallback_app.get_webview_window(label) {
+                if !w.is_visible().unwrap_or(false) {
+                    bring_window_to_front(&fallback_app, label);
+                }
+            }
+        });
+
+        // Window now exists, so subsequent calls short-circuit on the map lookup.
+        creating.store(false, Ordering::Release);
+    });
+}
+
+pub fn ensure_settings_window(app: &AppHandle) -> Option<tauri::WebviewWindow> {
+    if let Some(win) = app.get_webview_window("settings") {
+        // Reopen invalidates any reaper scheduled by an earlier close.
+        SETTINGS_GEN.fetch_add(1, Ordering::AcqRel);
+        return Some(win);
+    }
+    if SETTINGS_CREATING.swap(true, Ordering::AcqRel) {
+        return None; // Another caller is already building it.
+    }
+    create_auxiliary_window(
+        app, "settings", "Canalis Settings", "settings.html",
+        760.0, 620.0, 620.0, 480.0,
+        &SETTINGS_CREATING, &SETTINGS_GEN,
+    );
+    None
+}
+
+pub fn ensure_calendar_window(app: &AppHandle) -> Option<tauri::WebviewWindow> {
+    if let Some(win) = app.get_webview_window("calendar") {
+        CALENDAR_GEN.fetch_add(1, Ordering::AcqRel);
+        return Some(win);
+    }
+    if CALENDAR_CREATING.swap(true, Ordering::AcqRel) {
+        return None;
+    }
+    create_auxiliary_window(
+        app, "calendar", "Canalis Calendar", "calendar.html",
+        880.0, 600.0, 700.0, 480.0,
+        &CALENDAR_CREATING, &CALENDAR_GEN,
+    );
+    None
+}
+
 fn bring_window_to_front(app: &AppHandle, label: &str) {
     if let Some(win) = app.get_webview_window(label) {
         let _ = win.show();
@@ -2038,12 +2217,42 @@ fn bring_window_to_front(app: &AppHandle, label: &str) {
 
 #[tauri::command]
 pub fn open_settings_window(app: AppHandle) {
-    bring_window_to_front(&app, "settings");
+    // ensure_* reveals the window itself when it has to build it; when the
+    // window already exists we bring it to front here.
+    if ensure_settings_window(&app).is_some() {
+        bring_window_to_front(&app, "settings");
+    }
+}
+
+/// Opens Settings on a specific tab. Needed because the window is created on
+/// demand: an event emitted at a window that does not exist yet is lost, so the
+/// intent is parked in `PENDING_SETTINGS_TAB` for the freshly built window to
+/// pick up on mount. An already-open window is navigated by event instead.
+#[tauri::command]
+pub fn open_settings_tab(app: AppHandle, tab: String) {
+    if let Some(win) = app.get_webview_window("settings") {
+        let _ = win.emit("settings-navigate", tab);
+        bring_window_to_front(&app, "settings");
+        return;
+    }
+    if let Ok(mut slot) = PENDING_SETTINGS_TAB.lock() {
+        *slot = Some(tab);
+    }
+    if ensure_settings_window(&app).is_some() {
+        bring_window_to_front(&app, "settings");
+    }
+}
+
+#[tauri::command]
+pub fn take_pending_settings_tab() -> Option<String> {
+    PENDING_SETTINGS_TAB.lock().ok().and_then(|mut slot| slot.take())
 }
 
 #[tauri::command]
 pub fn open_calendar_window(app: AppHandle) {
-    bring_window_to_front(&app, "calendar");
+    if ensure_calendar_window(&app).is_some() {
+        bring_window_to_front(&app, "calendar");
+    }
 }
 
 #[tauri::command]

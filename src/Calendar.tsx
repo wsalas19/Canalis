@@ -3,7 +3,6 @@ import { createRoot } from "react-dom/client";
 import { getCurrentWebviewWindow } from "@tauri-apps/api/webviewWindow";
 import { Effect, EffectState } from "@tauri-apps/api/window";
 import { invoke } from "@tauri-apps/api/core";
-import { emit } from "@tauri-apps/api/event";
 import { Check, ChevronLeft, ChevronRight, RefreshCw, Settings as SettingsIcon } from "lucide-react";
 import { WindowControls } from "./components/WindowControls";
 import { initTheme } from "./theme";
@@ -120,8 +119,7 @@ function CalendarWindow() {
   };
 
   const manageSources = async () => {
-    await invoke("open_settings_window");
-    await emit("settings-navigate", "calendar-sync");
+    await invoke("open_settings_tab", { tab: "calendar-sync" });
   };
 
   const shift = (dir: number) => {
