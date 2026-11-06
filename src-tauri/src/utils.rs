@@ -474,15 +474,26 @@ fn settings_cache() -> &'static std::sync::Mutex<std::collections::HashMap<Strin
     crate::state::SETTINGS_CACHE.get_or_init(|| std::sync::Mutex::new(std::collections::HashMap::new()))
 }
 
+/// Parse a settings JSON file, tolerating a UTF-8 BOM.
+///
+/// A BOM is legal UTF-8 but `serde_json` rejects it. Before this helper existed, a BOM made the
+/// parse fail, and the failure path in `save_setting` started from an empty map and wrote it back —
+/// so one stray byte silently wiped every setting in the file.
+pub fn read_settings_file(
+    path: &std::path::Path,
+) -> Option<std::collections::HashMap<String, serde_json::Value>> {
+    let raw = std::fs::read(path).ok()?;
+    let body = raw.strip_prefix(&[0xEF, 0xBB, 0xBF]).unwrap_or(&raw);
+    serde_json::from_slice(body).ok()
+}
+
 /// Load settings.json into the in-memory cache. Call once at startup.
 pub fn init_settings_cache(app: &tauri::AppHandle) {
     use tauri::Manager;
     if let Some(path) = app.path().app_config_dir().ok().map(|p| p.join("settings.json")) {
-        if let Ok(content) = std::fs::read_to_string(path) {
-            if let Ok(settings) = serde_json::from_str::<std::collections::HashMap<String, serde_json::Value>>(&content) {
-                if let Ok(mut cache) = settings_cache().lock() {
-                    *cache = settings;
-                }
+        if let Some(settings) = read_settings_file(&path) {
+            if let Ok(mut cache) = settings_cache().lock() {
+                *cache = settings;
             }
         }
     }

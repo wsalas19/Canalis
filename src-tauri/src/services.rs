@@ -3197,6 +3197,7 @@ pub fn register_appbar(window: tauri::WebviewWindow) {
 
             if !window.is_visible().unwrap_or(false) {
                 let _ = window.show();
+                crate::diagnostics::milestone("notch-shown");
             }
         }
     } else {
@@ -3303,6 +3304,7 @@ fn register_dock_appbar_inner(window: tauri::WebviewWindow, attempt: i32) {
             // Always ensure the window is visible — show() is idempotent
             if !window.is_visible().unwrap_or(false) {
                 let _ = window.show();
+                crate::diagnostics::milestone("dock-shown");
             }
         }
     } else {

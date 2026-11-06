@@ -4,6 +4,7 @@ use std::os::windows::process::CommandExt;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, AtomicI64, Ordering};
 use std::sync::{Mutex, OnceLock};
+use std::time::Instant;
 use tauri::{AppHandle, Manager};
 
 const CREATE_NO_WINDOW: u32 = 0x0800_0000;
@@ -13,6 +14,7 @@ const REPORT_FILE: &str = "diagnostics.txt";
 const HITBOX_INTERVAL_MS: i64 = 250;
 
 static LOG_DIR: OnceLock<PathBuf> = OnceLock::new();
+static START_INSTANT: OnceLock<Instant> = OnceLock::new();
 static LOG_LOCK: Mutex<()> = Mutex::new(());
 static HITBOX_LOGGING: AtomicBool = AtomicBool::new(false);
 static LAST_HITBOX_MS: [AtomicI64; 2] = [AtomicI64::new(0), AtomicI64::new(0)];
@@ -21,6 +23,7 @@ pub static HOOK_EVENTS: AtomicI64 = AtomicI64::new(0);
 pub static HOOK_LAST_EVENT_MS: AtomicI64 = AtomicI64::new(0);
 
 pub fn init() {
+    let _ = START_INSTANT.set(Instant::now());
     let Ok(appdata) = std::env::var("APPDATA") else { return };
     let dir = PathBuf::from(appdata).join("io.github.wsalas19.canalis").join("logs");
     if fs::create_dir_all(&dir).is_err() {
@@ -50,6 +53,13 @@ pub fn log(msg: &str) {
         let stamp = chrono::Local::now().format("%Y-%m-%d %H:%M:%S%.3f");
         let _ = writeln!(f, "[{stamp}] {msg}");
     }
+}
+
+/// Log a startup milestone with milliseconds elapsed since `init`.
+/// Cheap and panic-free: a missing start instant degrades to 0.
+pub fn milestone(name: &str) {
+    let ms = START_INSTANT.get().map(|t| t.elapsed().as_millis()).unwrap_or(0);
+    log(&format!("[startup] {name} +{ms}ms"));
 }
 
 fn install_panic_hook() {

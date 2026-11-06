@@ -637,6 +637,14 @@ function OverlayApp() {
 
   // ── Splash Detection ──
   useEffect(() => {
+    const MIN_SPLASH_MS = 600;
+    let splashShownAt = 0;
+    let notchReady = false;
+    let finishTimer: any = null;
+    let backstopTimer: any = null;
+    let unlistenReady: Promise<() => void> | null = null;
+    let disposed = false;
+
     const showSplash = async () => {
       splashActiveRef.current = true;
       splashPlayingRef.current = true;
@@ -646,21 +654,74 @@ function OverlayApp() {
       }
       await new Promise((r) => setTimeout(r, 200));
       setMode('splash');
+      splashShownAt = performance.now();
+      invoke("report_milestone", { name: "splash-shown" }).catch(() => {});
     };
-    setTimeout(() => onSplashCompleteRef.current(), 5500);
-    // Static pane: hold it just long enough to mask the boot, then hand off.
-    setTimeout(() => onSplashCompleteRef.current(), 3200);
 
-    showSplash();
-    getVersion().then((v) => {
-      localStorage.setItem("nectar-app-version", v);
-      setAppVersion(v);
-    }).catch(() => {});
+    // Hand off to the notch as soon as it is mounted, but never before the
+    // floor, so a fast boot does not flicker the splash.
+    const finishIfReady = () => {
+      if (!notchReady || disposed || splashDoneRef.current) return;
+      const elapsed = splashShownAt ? performance.now() - splashShownAt : 0;
+      const remaining = Math.max(0, MIN_SPLASH_MS - elapsed);
+      if (remaining <= 0) {
+        onSplashCompleteRef.current();
+        return;
+      }
+      if (finishTimer) return;
+      finishTimer = setTimeout(() => {
+        finishTimer = null;
+        finishIfReady();
+      }, remaining);
+    };
+
+    const setup = async () => {
+      // A rebuilt overlay (the window is reaped after the splash) must mount
+      // straight into idle: no splash, no splash-done re-emit.
+      let shouldSplash = true;
+      try { shouldSplash = await invoke<boolean>('overlay_should_splash'); } catch { /* default to splash */ }
+      if (disposed || !shouldSplash) return;
+
+      unlistenReady = listen("notch-ready", () => {
+        notchReady = true;
+        finishIfReady();
+      });
+
+      // Covers the case where the notch announced before this window listened.
+      invoke<boolean>("is_notch_ready")
+        .then((ready) => {
+          if (ready) {
+            notchReady = true;
+            finishIfReady();
+          }
+        })
+        .catch(() => {});
+
+      // Hard ceiling: never hold the splash longer than this.
+      backstopTimer = setTimeout(() => onSplashCompleteRef.current(), 5500);
+
+      showSplash();
+      getVersion().then((v) => {
+        localStorage.setItem("nectar-app-version", v);
+        setAppVersion(v);
+      }).catch(() => {});
+    };
+
+    invoke("report_milestone", { name: "overlay-mounted" }).catch(() => {});
+    setup();
+
+    return () => {
+      disposed = true;
+      if (finishTimer) clearTimeout(finishTimer);
+      if (backstopTimer) clearTimeout(backstopTimer);
+      if (unlistenReady) unlistenReady.then((fn) => fn());
+    };
   }, []);
 
   const onSplashComplete = useCallback(() => {
     if (splashDoneRef.current) return;
     splashDoneRef.current = true;
+    invoke("report_milestone", { name: "splash-done" }).catch(() => {});
     localStorage.setItem("nectar-first-run", "done");
     setTimeout(() => {
       splashActiveRef.current = false;
@@ -741,6 +802,18 @@ function OverlayApp() {
       }
     };
     applyUpdateStatusRef.current = applyUpdateStatus;
+
+    // A rebuilt overlay may have missed the auto-update-status event that made
+    // it relevant (the window is reaped after the splash). Recover the live
+    // phase on mount so it does not sit unused during a real update.
+    invoke<{ status?: string; progress?: number }>("get_update_state")
+      .then((state) => {
+        if (!state?.status || state.status === 'done' || state.status === 'idle') return;
+        const payload = { status: state.status, progress: state.progress };
+        if (splashPlayingRef.current) pendingUpdateRef.current = payload;
+        else applyUpdateStatus(payload);
+      })
+      .catch(() => {});
 
     const autoUpdatePromise = listen<{ status: string; progress?: number }>("auto-update-status", (event) => {
       if (splashPlayingRef.current) {

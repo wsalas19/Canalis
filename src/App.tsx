@@ -281,7 +281,7 @@ function UpdateActivity() {
         animate={{ opacity: [0.5, 1, 0.5], scale: [0.9, 1, 0.9] }}
         transition={{ duration: 1.6, repeat: Infinity, ease: "easeInOut" }}
       >
-        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#32D74B" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#32D74B" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
           <path d="M12 5v11" />
           <path d="M6 12l6 6 6-6" />
         </svg>
@@ -705,6 +705,18 @@ function AppNotch() {
 
     return waitForSplash();
   }, [windowLabel]);
+
+  // Announce that the notch's JS has mounted so the splash can hand off early.
+  // Runs once per mount; both calls are fire-and-forget.
+  //
+  // No requestAnimationFrame here on purpose: the notch window is created hidden and
+  // Chromium does not service rAF for hidden windows, so waiting for a frame would only
+  // work after the window is shown — which is what we are trying to avoid waiting for.
+  // A useEffect already runs after the commit, so the tree and its layout are ready.
+  useEffect(() => {
+    invoke("report_milestone", { name: "notch-mounted" }).catch(() => {});
+    invoke("notch_ready").catch(() => {});
+  }, []);
 
   // Settings state
   const [settingsWeatherEnabled, setSettingsWeatherEnabled] = useState(() => localStorage.getItem("nectar-weather-enabled") !== "false");

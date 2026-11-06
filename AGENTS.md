@@ -37,6 +37,11 @@ Window labels, URLs and geometry live in `src-tauri/tauri.conf.json`, except
 `settings` and `calendar`: those are created lazily on first open by
 `ensure_settings_window` / `ensure_calendar_window` in `commands.rs` (their
 geometry lives there) and reaped 5 minutes after being hidden.
+The `overlay` is declared in `tauri.conf.json` so it exists for the startup
+splash, but `ensure_overlay_window` rebuilds it on demand and
+`schedule_overlay_reap` destroys it ~60 s after it is hidden — but only while all
+four HUD toggles (`nectar-volume-overlay-enabled`, `nectar-brightness-overlay-enabled`,
+`nectar-volume-edge-enabled`, `nectar-brightness-edge-enabled`) are off.
 Runtime sizing/positioning and per-monitor windows are owned by
 `src-tauri/src/commands.rs`, `src-tauri/src/monitors.rs` and
 `src-tauri/src/services.rs`; the notch cannot resize itself from React.

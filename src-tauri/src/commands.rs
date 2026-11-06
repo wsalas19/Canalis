@@ -101,6 +101,30 @@ pub fn set_ignore_cursor_events(window: Window, ignore: bool) {
     let _ = window.set_ignore_cursor_events(ignore);
 }
 
+/// Frontend-driven startup milestone; logs `[startup] {name} +{ms}ms`.
+#[tauri::command]
+pub fn report_milestone(name: String) {
+    crate::diagnostics::milestone(&name);
+}
+
+static NOTCH_READY: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+/// Called once the notch webview has mounted. Idempotent: logs and emits
+/// `"notch-ready"` only on the first call.
+#[tauri::command]
+pub fn notch_ready(app: AppHandle) {
+    if NOTCH_READY.swap(true, Ordering::Relaxed) {
+        return;
+    }
+    crate::diagnostics::milestone("notch-js-ready");
+    let _ = app.emit("notch-ready", ());
+}
+
+#[tauri::command]
+pub fn is_notch_ready() -> bool {
+    NOTCH_READY.load(Ordering::Relaxed)
+}
+
 #[tauri::command]
 pub async fn init_dock(app: AppHandle, mode: String) {
     // Backend guard: bail if dock is disabled in settings.
@@ -130,6 +154,7 @@ pub async fn init_dock_window(app: &AppHandle, dock_win: tauri::WebviewWindow, m
         let _ = dock_win.set_position(tauri::PhysicalPosition::new(-32000, -32000));
     }
     let _ = dock_win.show();
+    crate::diagnostics::milestone("dock-shown");
     if let Ok(hwnd) = dock_win.hwnd() { re_assert_topmost(hwnd); }
 
     // 2. Register as appbar (fixed) or manually position (auto-hide)
@@ -368,6 +393,7 @@ pub async fn init_notch_window(app: &AppHandle, main_win: tauri::WebviewWindow, 
         register_appbar(main_win.clone());
     } else {
         let _ = main_win.show();
+        crate::diagnostics::milestone("notch-shown");
         if let Ok(hwnd) = main_win.hwnd() {
             let hwnd_val = hwnd.0 as isize;
             tauri::async_runtime::spawn_blocking(move || {
@@ -2311,26 +2337,193 @@ pub fn hide_overlay(app: AppHandle) {
     if let Some(win) = app.get_webview_window("overlay") { let _ = win.hide(); }
 }
 
+// --- Lazily rebuilt overlay window ------------------------------------------
+//
+// The overlay is a full-screen transparent webview whose only job after the
+// startup splash is the rare auto-update HUD (and the volume/brightness HUDs,
+// when their toggles are on). It is declared in tauri.conf.json so it exists at
+// startup for the splash, but once the splash is over and no HUD toggle needs it
+// it is destroyed to reclaim its VRAM/memory, then rebuilt on demand.
+
+/// Idle timeout before a hidden overlay window is destroyed. Overridable for
+/// tests via `CANALIS_OVERLAY_IDLE_SECS`.
+const OVERLAY_IDLE_SECS: u64 = 60;
+
+/// Bumped whenever the overlay is (re)opened and whenever a reap is scheduled,
+/// so a pending reaper from an earlier schedule cannot destroy a window that has
+/// since been rebuilt or shown.
+static OVERLAY_GEN: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+
+/// Guard so two concurrent callers cannot build the overlay twice.
+static OVERLAY_CREATING: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+/// True once the startup splash has finished this process. A rebuilt overlay
+/// must not replay it.
+static OVERLAY_SPLASH_DONE: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+/// The four HUD toggles the overlay renders. Absent keys count as enabled (the
+/// UI defaults them on), so we stay conservative and keep the overlay.
+const OVERLAY_HUD_KEYS: [&str; 4] = [
+    "nectar-volume-overlay-enabled",
+    "nectar-brightness-overlay-enabled",
+    "nectar-volume-edge-enabled",
+    "nectar-brightness-edge-enabled",
+];
+
+fn overlay_idle_secs() -> u64 {
+    std::env::var("CANALIS_OVERLAY_IDLE_SECS")
+        .ok()
+        .and_then(|v| v.parse::<u64>().ok())
+        .unwrap_or(OVERLAY_IDLE_SECS)
+}
+
+/// Whether any HUD surface that the overlay renders is enabled, resolving each
+/// toggle through the given lookup. A missing key counts as enabled, matching
+/// the frontend defaults.
+fn hud_settings_enabled(get: impl Fn(&str) -> Option<String>) -> bool {
+    OVERLAY_HUD_KEYS
+        .iter()
+        .any(|key| get(key).map(|v| v != "false").unwrap_or(true))
+}
+
+/// Whether any HUD surface still needs the overlay, read from the settings cache.
+fn overlay_hud_enabled(app: &AppHandle) -> bool {
+    hud_settings_enabled(|key| crate::utils::get_setting_str(app, key))
+}
+
+/// Returns the overlay window, building it on demand if it was reaped.
+///
+/// Returns `None` while the build is in flight (the caller must not assume the
+/// window exists yet); `create_auxiliary_window` uses the same shape. The window
+/// reproduces the `overlay` entry in tauri.conf.json exactly.
+pub fn ensure_overlay_window(app: &AppHandle) -> Option<tauri::WebviewWindow> {
+    // Any caller invalidates a reap scheduled earlier, so a rebuild is not
+    // immediately destroyed by a stale reaper.
+    OVERLAY_GEN.fetch_add(1, Ordering::AcqRel);
+
+    if let Some(win) = app.get_webview_window("overlay") {
+        return Some(win);
+    }
+    if OVERLAY_CREATING.swap(true, Ordering::AcqRel) {
+        return None; // Another caller is already building it.
+    }
+
+    let app = app.clone();
+    tauri::async_runtime::spawn(async move {
+        let built = tauri::WebviewWindowBuilder::new(
+            &app,
+            "overlay",
+            tauri::WebviewUrl::App("overlay.html".into()),
+        )
+        .title("Overlay")
+        .inner_size(1920.0, 1080.0)
+        .position(0.0, 0.0)
+        .decorations(false)
+        .transparent(true)
+        .resizable(false)
+        .maximizable(false)
+        .minimizable(false)
+        .closable(false)
+        .always_on_top(true)
+        .visible_on_all_workspaces(true)
+        .focused(false)
+        .skip_taskbar(true)
+        .shadow(false)
+        .visible(false)
+        .build();
+
+        let win = match built {
+            Ok(w) => w,
+            Err(_) => {
+                // Release the guard so a later call can retry the build.
+                OVERLAY_CREATING.store(false, Ordering::Release);
+                return;
+            }
+        };
+
+        if let Ok(hwnd) = win.hwnd() {
+            crate::services::disable_os_rounding(hwnd);
+        }
+        let _ = win.set_ignore_cursor_events(true);
+
+        // On Windows, set_position doesn't take effect on a window that has
+        // never been shown. Show it once to register it with the compositor,
+        // then hide immediately (same priming as at startup in main.rs).
+        let _ = win.show();
+        let _ = win.hide();
+        crate::services::sync_overlays(&app);
+
+        let overlay_handle = app.clone();
+        win.on_window_event(move |e| {
+            if let tauri::WindowEvent::CloseRequested { api, .. } = e {
+                api.prevent_close();
+                crate::commands::restore_taskbar_and_exit(&overlay_handle);
+            }
+        });
+
+        OVERLAY_CREATING.store(false, Ordering::Release);
+    });
+
+    None
+}
+
+/// Schedules destruction of the hidden overlay after the idle timeout.
+///
+/// Skipped entirely while any HUD toggle is on: the overlay is then a live
+/// surface, not dead weight. A missing setting counts as on, so a fresh profile
+/// (or a settings read failure) never destroys a window it may still need.
+pub fn schedule_overlay_reap(app: &AppHandle) {
+    if overlay_hud_enabled(app) {
+        return;
+    }
+    let my_gen = OVERLAY_GEN.fetch_add(1, Ordering::AcqRel) + 1;
+    let reap_app = app.clone();
+    let secs = overlay_idle_secs();
+    tauri::async_runtime::spawn(async move {
+        tokio::time::sleep(std::time::Duration::from_secs(secs)).await;
+        // Skip if the window was rebuilt/shown (gen moved on) or is visible.
+        if OVERLAY_GEN.load(Ordering::Acquire) == my_gen {
+            if let Some(w) = reap_app.get_webview_window("overlay") {
+                if !w.is_visible().unwrap_or(false) {
+                    let _ = w.destroy();
+                }
+            }
+        }
+    });
+}
+
+/// True until the splash has completed once this process, so a rebuilt overlay
+/// mounts straight into `idle` instead of replaying the animation.
+#[tauri::command]
+pub fn overlay_should_splash() -> bool {
+    !OVERLAY_SPLASH_DONE.load(Ordering::Acquire)
+}
+
 #[tauri::command]
 pub fn set_splash_fullscreen(app: AppHandle, fullscreen: bool) {
     let already_fullscreen = crate::state::OVERLAY_IN_SPLASH.swap(fullscreen, Ordering::Relaxed);
-    if let Some(win) = app.get_webview_window("overlay") {
-        if fullscreen {
-            if already_fullscreen && win.is_visible().unwrap_or(false) {
-                return;
-            }
-            let _ = win.hide();
-            if let Ok(Some(monitor)) = win.primary_monitor() {
-                let size = monitor.size();
-                let pos = monitor.position();
-                let _ = win.set_position(tauri::PhysicalPosition::new(pos.x, pos.y));
-                let _ = win.set_size(tauri::PhysicalSize::new(size.width, size.height));
-            }
-            let _ = win.show();
-        } else {
-            let _ = win.hide();
-            crate::services::sync_overlays(&app);
+    if fullscreen {
+        // The window may have been reaped after the splash; bring it back.
+        let Some(win) = ensure_overlay_window(&app) else { return };
+        if already_fullscreen && win.is_visible().unwrap_or(false) {
+            return;
         }
+        let _ = win.hide();
+        if let Ok(Some(monitor)) = win.primary_monitor() {
+            let size = monitor.size();
+            let pos = monitor.position();
+            let _ = win.set_position(tauri::PhysicalPosition::new(pos.x, pos.y));
+            let _ = win.set_size(tauri::PhysicalSize::new(size.width, size.height));
+        }
+        let _ = win.show();
+    } else {
+        // The splash has run once; a rebuilt overlay must not replay it.
+        OVERLAY_SPLASH_DONE.store(true, Ordering::Release);
+        if let Some(win) = app.get_webview_window("overlay") {
+            let _ = win.hide();
+        }
+        crate::services::sync_overlays(&app);
+        schedule_overlay_reap(&app);
     }
 }
 
@@ -3154,7 +3347,16 @@ pub fn save_setting(app: AppHandle, key: String, value: serde_json::Value) -> Re
     let path = app.path().app_config_dir().map_err(|e| e.to_string())?.join("settings.json");
     if let Some(parent) = path.parent() { let _ = std::fs::create_dir_all(parent); }
     let mut settings = HashMap::new();
-    if let Ok(content) = std::fs::read_to_string(&path) { if let Ok(existing) = serde_json::from_str::<HashMap<String, serde_json::Value>>(&content) { settings = existing; } }
+    match crate::utils::read_settings_file(&path) {
+        Some(existing) => settings = existing,
+        None => {
+            // An unreadable file must never be replaced by an empty map silently: keep a copy so the
+            // user's settings survive a bad parse (BOM, truncated write, hand edit).
+            if std::fs::metadata(&path).map(|m| m.len() > 2).unwrap_or(false) {
+                let _ = std::fs::copy(&path, path.with_extension("json.bak"));
+            }
+        }
+    }
     settings.insert(key.clone(), value);
     let content = serde_json::to_string(&settings).map_err(|e| e.to_string())?;
     std::fs::write(path, content).map_err(|e| e.to_string())?;
@@ -3169,6 +3371,17 @@ pub fn save_setting(app: AppHandle, key: String, value: serde_json::Value) -> Re
 
     if key == "nectar-language" {
         crate::i18n::refresh_tray_labels(&app);
+    }
+
+    // Turning a HUD toggle on means the overlay is needed again: rebuild it if it
+    // was reaped. `overlay_hud_enabled` reads the cache just replaced above.
+    if OVERLAY_HUD_KEYS.contains(&key.as_str()) {
+        if overlay_hud_enabled(&app) {
+            ensure_overlay_window(&app);
+        } else {
+            // Last HUD just went off: the overlay is dead weight again.
+            schedule_overlay_reap(&app);
+        }
     }
 
     if MONITOR_TARGETING_KEYS.contains(&key.as_str()) {
@@ -4030,8 +4243,8 @@ pub fn setup_settings_watcher(app: AppHandle) {
 
                 std::thread::sleep(std::time::Duration::from_millis(200));
 
-                if let Ok(new_content) = std::fs::read_to_string(&settings_path) {
-                    if let Ok(new_settings) = serde_json::from_str::<HashMap<String, serde_json::Value>>(&new_content) {
+                {
+                    if let Some(new_settings) = crate::utils::read_settings_file(&settings_path) {
                         // Collect diffs while holding the lock, then drop before emitting
                         let (changed, removed) = {
                             let mut cache = crate::state::SETTINGS_CACHE
@@ -4066,6 +4279,15 @@ pub fn setup_settings_watcher(app: AppHandle) {
                                 "settings-external-changed",
                                 serde_json::json!({ "key": key, "value": null }),
                             );
+                        }
+                        // External edits to a HUD toggle: rebuild it if one just went on, and
+                        // re-arm the reaper if the last one just went off.
+                        if changed.iter().any(|(k, _)| OVERLAY_HUD_KEYS.contains(&k.as_str())) {
+                            if overlay_hud_enabled(&app) {
+                                ensure_overlay_window(&app);
+                            } else {
+                                schedule_overlay_reap(&app);
+                            }
                         }
                     }
                 }

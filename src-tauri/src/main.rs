@@ -165,6 +165,9 @@ fn main() {
             Some(vec![]),
         ))
         .invoke_handler(tauri::generate_handler![
+            report_milestone,
+            notch_ready,
+            is_notch_ready,
             hide_native_osd,
             setup_shelf_drop,
             shelf_thumbnail,
@@ -189,6 +192,7 @@ fn main() {
             resize_settings_window,
             hide_overlay,
             set_splash_fullscreen,
+            overlay_should_splash,
             sync_overlay_position,
             select_media_session,
             media_play_pause,
@@ -357,6 +361,7 @@ fn main() {
                 if let Ok(hwnd) = ov_win.hwnd() { crate::services::disable_os_rounding(hwnd); }
                 let _ = ov_win.show();
                 let _ = ov_win.hide();
+                diagnostics::milestone("overlay-primed");
                 let overlay_handle = app.handle().clone();
                 ov_win.on_window_event(move |e| {
                     if let tauri::WindowEvent::CloseRequested { api, .. } = e {
@@ -469,6 +474,7 @@ fn main() {
                     })
                     .build(app)?;
             }
+            diagnostics::milestone("setup-done");
             Ok(())
         })
         .build(tauri::generate_context!())

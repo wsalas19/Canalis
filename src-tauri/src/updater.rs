@@ -21,6 +21,31 @@ const RELEASES_API: &str = "https://api.github.com/repos/wsalas19/Canalis/releas
 static CHECK_LOCK: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
 static UPDATE_BUSY: AtomicBool = AtomicBool::new(false);
 static LAST_CHECK: Mutex<Option<UpdateCheckResult>> = Mutex::new(None);
+/// Last auto-update phase emitted this process, so a rebuilt overlay can recover
+/// the HUD state it missed while the window did not exist. (status, progress).
+static LAST_STATUS: Mutex<Option<(String, u32)>> = Mutex::new(None);
+
+/// Phases the overlay must render. Before emitting one of these, make sure the
+/// (possibly reaped) overlay window exists so a listener is present.
+fn overlay_needs_status(status: &str) -> bool {
+    matches!(status, "downloading" | "installing" | "error" | "failed")
+}
+
+/// Emits an auto-update phase: ensures the overlay exists for the phases it
+/// renders, remembers the phase for later recovery, then emits.
+fn emit_update_status(app: &AppHandle, status: &str, progress: Option<u32>) {
+    if overlay_needs_status(status) {
+        crate::commands::ensure_overlay_window(app);
+    }
+    if let Ok(mut slot) = LAST_STATUS.lock() {
+        *slot = Some((status.to_string(), progress.unwrap_or(0)));
+    }
+    let payload = match progress {
+        Some(p) => serde_json::json!({ "status": status, "progress": p }),
+        None => serde_json::json!({ "status": status }),
+    };
+    let _ = app.emit("auto-update-status", payload);
+}
 
 #[derive(Clone, Default, Serialize)]
 pub struct UpdateCheckResult {
@@ -31,6 +56,13 @@ pub struct UpdateCheckResult {
     pub date: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub body: Option<String>,
+    /// Last auto-update phase emitted this process (checking/downloading/
+    /// installing/done), so a rebuilt overlay can recover the HUD it missed.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub status: Option<String>,
+    /// Download progress percent for the last `downloading` phase, if any.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub progress: Option<u32>,
 }
 
 #[derive(Default, Serialize, Deserialize)]
@@ -126,6 +158,8 @@ fn result_from_state(state: &PersistedUpdateState) -> UpdateCheckResult {
         version: Some(state.version.clone()),
         date: (!state.date.is_empty()).then(|| state.date.clone()),
         body: None,
+        status: None,
+        progress: None,
     }
 }
 
@@ -188,6 +222,8 @@ pub async fn check(app: &AppHandle, force: bool) -> Result<UpdateCheckResult, St
                 .and_then(|value| value.as_str())
                 .map(str::to_string),
             body: update.body.clone(),
+            status: None,
+            progress: None,
         },
         None => UpdateCheckResult::default(),
     };
@@ -247,7 +283,7 @@ async fn install_inner(app: &AppHandle) -> Result<(), String> {
         .installer_args(installer_scope_args())
         .on_before_exit(move || {
             crate::state::SHUTTING_DOWN.store(true, Ordering::Relaxed);
-            let _ = hook_handle.emit("auto-update-status", serde_json::json!({ "status": "installing" }));
+            emit_update_status(&hook_handle, "installing", None);
             hook_handle.cleanup_before_exit();
         })
         .build()
@@ -259,7 +295,7 @@ async fn install_inner(app: &AppHandle) -> Result<(), String> {
         .map_err(|e| e.to_string())?
         .ok_or_else(|| "no update available".to_string())?;
 
-    let _ = app.emit("auto-update-status", serde_json::json!({ "status": "downloading", "progress": 0 }));
+    emit_update_status(app, "downloading", Some(0));
 
     let progress_handle = app.clone();
     let downloaded = Arc::new(AtomicU64::new(0));
@@ -271,10 +307,7 @@ async fn install_inner(app: &AppHandle) -> Result<(), String> {
                 if let Some(total) = total {
                     if total > 0 {
                         let progress = (current.saturating_mul(100) / total) as u32;
-                        let _ = progress_handle.emit(
-                            "auto-update-status",
-                            serde_json::json!({ "status": "downloading", "progress": progress }),
-                        );
+                        emit_update_status(&progress_handle, "downloading", Some(progress));
                     }
                 }
             },
@@ -287,7 +320,7 @@ async fn install_inner(app: &AppHandle) -> Result<(), String> {
     // the plugin, so this is only reached on other platforms.
     #[cfg(not(windows))]
     {
-        let _ = app.emit("auto-update-status", serde_json::json!({ "status": "done" }));
+        emit_update_status(&app, "done", None);
         app.restart()
     }
 
@@ -301,7 +334,7 @@ pub async fn run_startup_check(app: AppHandle) {
     let auto_update = crate::utils::get_setting_str(&app, "nectar-auto-update").as_deref() == Some("true");
 
     if auto_update {
-        let _ = app.emit("auto-update-status", serde_json::json!({ "status": "checking" }));
+        emit_update_status(&app, "checking", None);
     }
 
     let ready_to_install = |result: &UpdateCheckResult| prerelease_channel(&app) || release_is_old_enough(result);
@@ -310,7 +343,7 @@ pub async fn run_startup_check(app: AppHandle) {
         Ok(result) => result,
         Err(_) => {
             if auto_update {
-                let _ = app.emit("auto-update-status", serde_json::json!({ "status": "done" }));
+                emit_update_status(&app, "done", None);
             }
             return;
         }
@@ -320,21 +353,21 @@ pub async fn run_startup_check(app: AppHandle) {
 
     if !result.available {
         if auto_update {
-            let _ = app.emit("auto-update-status", serde_json::json!({ "status": "done" }));
+            emit_update_status(&app, "done", None);
         }
         return;
     }
 
     if auto_update && ready_to_install(&result) && install_needs_unavailable_elevation() {
         crate::diagnostics::log("auto-update: skipping silent install, all-users install needs elevation this process doesn't have; leaving update available for manual install");
-        let _ = app.emit("auto-update-status", serde_json::json!({ "status": "done" }));
+        emit_update_status(&app, "done", None);
     } else if auto_update && ready_to_install(&result) {
         // On Windows this never returns: the installer exits the process.
         if install(&app).await.is_err() {
-            let _ = app.emit("auto-update-status", serde_json::json!({ "status": "done" }));
+            emit_update_status(&app, "done", None);
         }
     } else if auto_update {
-        let _ = app.emit("auto-update-status", serde_json::json!({ "status": "done" }));
+        emit_update_status(&app, "done", None);
     }
 }
 
@@ -352,12 +385,23 @@ pub async fn install_update(app: AppHandle) -> Result<(), String> {
 
 #[tauri::command]
 pub fn get_update_state(app: AppHandle) -> UpdateCheckResult {
-    if let Ok(cached) = LAST_CHECK.lock() {
+    let mut result = if let Ok(cached) = LAST_CHECK.lock() {
         if let Some(result) = cached.as_ref() {
-            return result.clone();
+            result.clone()
+        } else {
+            result_from_state(&read_state(&app))
+        }
+    } else {
+        result_from_state(&read_state(&app))
+    };
+    // Attach the live phase so a rebuilt overlay can recover the HUD it missed.
+    if let Ok(slot) = LAST_STATUS.lock() {
+        if let Some((status, progress)) = slot.as_ref() {
+            result.status = Some(status.clone());
+            result.progress = Some(*progress);
         }
     }
-    result_from_state(&read_state(&app))
+    result
 }
 
 fn parse_rfc3339_utc(value: &str) -> Option<i64> {
