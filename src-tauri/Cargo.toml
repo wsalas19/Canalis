@@ -1,6 +1,6 @@
 [package]
 name = "canalis"
-version = "2.0.1"
+version = "2.0.2"
 description = "A notch and a dock for Windows"
 authors = ["kua8", "wsalas19"]
 edition = "2021"
