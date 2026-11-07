@@ -166,8 +166,10 @@ bun run tauri dev
 
 These are ideas under consideration, not promises.
 
+- [x] Lower memory use, with Settings loaded on demand
+- [ ] Lower CPU and GPU use across the board: idle polling, renderer count, VRAM
+- [ ] A lightweight Pi harness AI agent in a notch block, with bring-your-own-key stored locally in Settings
 - [ ] Background tray programs (antivirus, VPN) in the notch
-- [ ] Lower memory use, with Settings loaded on demand
 - [ ] Code signing for the installer
 - [x] Stable and pre-release update channels
 - [x] Multiple media sessions, Task Manager in the dock menu, show desktop corner
